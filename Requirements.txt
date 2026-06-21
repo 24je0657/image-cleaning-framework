@@ -1,0 +1,9 @@
+pip install torch torchvision torchaudio
+pip install opencv-python opencv-python-headless
+pip install numpy scikit-learn pandas
+pip install streamlit
+pip install faiss-cpu
+pip install imagehash pillow
+
+
+// torchaudio	Audio processing (not needed for images).
