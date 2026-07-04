@@ -40,6 +40,13 @@ This project uses the **Animals Image Dataset** from Kaggle for training and eva
   <img src="assets/project_pipeline.png" width="950">
 </p>
 
+## Pipeline Architecture
+
+<p align="center">
+  <img src="assets/architecture.png" width="950">
+  </p>
+
+
 ## Key Features
 
 - **Image Validation & Preprocessing**
@@ -241,6 +248,21 @@ The trained autoencoder successfully reconstructs clean images while suppressing
   <img src="assets/reconstruction_sample.png" width="900">
 </p>
 
+## Outlier Detection Results
+
+The framework projects 2048-dimensional ResNet50 embeddings into a lower-dimensional feature space using PCA, followed by Isolation Forest for anomaly detection. The figures below visualize the detected outliers in the training and validation datasets.
+
+### Training Set
+
+<p align="center">
+  <img src="assets/train_outlier_scatter.png" width="700">
+</p>
+
+### Validation Set
+
+<p align="center">
+  <img src="assets/val_outlier_scatter.png" width="700">
+</p>
 
 ## Current Progress
 
@@ -252,14 +274,13 @@ The trained autoencoder successfully reconstructs clean images while suppressing
 | Blur Detection | Completed |
 | Autoencoder Training | Completed |
 | Noise Detection | Completed |
-| Outlier Detection | In Progress |
+| Outlier Detection | Completed|
 | Mislabel Detection | Planned |
 | Decision Engine | Planned |
 | Streamlit Dashboard | Planned |
 
 ## Future Improvements
 
-- Implement Isolation Forest–based Outlier Detection.
 - Develop Embedding-based Mislabel Detection.
 - Build a Decision Engine for unified quality scoring.
 - Deploy an interactive Streamlit dashboard.
