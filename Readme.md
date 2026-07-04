@@ -70,7 +70,7 @@ This project uses the **Animals Image Dataset** from Kaggle for training and eva
   - Detects noisy images using reconstruction error (Mean Squared Error).
   - Applies a dynamic threshold (`mean + 2 × standard deviation`) for robust noise classification.
 
-- **Outlier Detection (In Progress)**
+- **Outlier Detection 
   - Identifies visually irrelevant images using Isolation Forest on deep feature embeddings.
 
 - **Mislabel Detection (Planned)**
@@ -199,7 +199,7 @@ image-cleaning-framework/
 
 ---
 
-### 6) Outlier Detection *(In Progress)*
+### 6) Outlier Detection 
 - Detects visually irrelevant or anomalous images using Isolation Forest on deep feature embeddings.
 
 ---
