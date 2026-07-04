@@ -4,6 +4,7 @@ pip install numpy scikit-learn pandas
 pip install streamlit
 pip install faiss-cpu
 pip install imagehash pillow
+pip install matplotlib
 
 
 // torchaudio	Audio processing (not needed for images).
