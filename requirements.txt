@@ -5,6 +5,8 @@ pip install streamlit
 pip install faiss-cpu
 pip install imagehash pillow
 pip install matplotlib
+pip install seaborn
+
 
 
 // torchaudio	Audio processing (not needed for images).
