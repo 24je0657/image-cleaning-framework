@@ -70,10 +70,10 @@ This project uses the **Animals Image Dataset** from Kaggle for training and eva
   - Detects noisy images using reconstruction error (Mean Squared Error).
   - Applies a dynamic threshold (`mean + 2 × standard deviation`) for robust noise classification.
 
-- **Outlier Detection (In Progress)**
+- **Outlier Detection**
   - Identifies visually irrelevant images using Isolation Forest on deep feature embeddings.
 
-- **Mislabel Detection (Planned)**
+- **Mislabel Detection**
   - Detects incorrectly labeled images through embedding-based clustering and class consistency analysis.
 
 - **Decision Engine (Planned)**
@@ -151,7 +151,8 @@ image-cleaning-framework/
 |----------|--------------|
 | **Programming Language** | Python |
 | **Deep Learning** | PyTorch, TorchVision |
-| **Computer Vision** | OpenCV, Pillow (PIL) |
+| **Computer Vision** | OpenCV, Pillow **Mislabel Detection**
+  - Detects incorrectly labeled images through embedding-based clustering and class consistency analysis.(PIL) |
 | **Feature Extraction** | ResNet50 (Pretrained CNN) |
 | **Machine Learning** | Scikit-learn (Isolation Forest, Cosine Similarity) |
 | **Data Processing** | NumPy, Pandas |
@@ -204,8 +205,8 @@ image-cleaning-framework/
 
 ---
 
-### 7) Mislabel Detection *(Planned)*
-- Identifies potentially mislabeled images through embedding-based similarity analysis and class consistency checks.
+### 7) Mislabel Detection 
+- Identifies potentially mislabeled images through embedding-based similarity analysis and class consistency checks. Ensemble voting(KMeans + KNN + NN).
 
 ---
 
@@ -264,6 +265,22 @@ The framework projects 2048-dimensional ResNet50 embeddings into a lower-dimensi
   <img src="assets/val_outlier_scatter.png" width="700">
 </p>
 
+## Mislabel Detection Results
+
+### Training Set
+
+<p align="center">
+  <img src="assets/train_mislabel_heatmap.png" width="700">
+</p>
+
+---
+
+### Validation Set
+
+<p align="center">
+  <img src="assets/val_mislabel_heatmap.png" width="700">
+</p>
+
 ## Current Progress
 
 | Module | Status |
@@ -275,13 +292,12 @@ The framework projects 2048-dimensional ResNet50 embeddings into a lower-dimensi
 | Autoencoder Training | Completed |
 | Noise Detection | Completed |
 | Outlier Detection | Completed|
-| Mislabel Detection | Planned |
+| Mislabel Detection | Completed |
 | Decision Engine | Planned |
 | Streamlit Dashboard | Planned |
 
 ## Future Improvements
 
-- Develop Embedding-based Mislabel Detection.
 - Build a Decision Engine for unified quality scoring.
 - Deploy an interactive Streamlit dashboard.
 - Add support for custom datasets through a web interface.

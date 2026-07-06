@@ -19,7 +19,7 @@ N_CLASSES = 5  # Number of classes in the dataset
 K_NEIGHBORS = 11  # Number of neighbors for KNN
 PCA_COMPONENTS = 128  # Reduce embeddings to 128 dimensions
 RANDOM_STATE = 42  # For reproducibility
-K_MEANS = 25
+K_MEANS = N_CLASSES * 5
 
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
