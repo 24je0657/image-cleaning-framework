@@ -76,7 +76,7 @@ This project uses the **Animals Image Dataset** from Kaggle for training and eva
 - **Mislabel Detection**
   - Detects incorrectly labeled images through embedding-based clustering and class consistency analysis.
 
-- **Decision Engine (Planned)**
+- **Decision Engine**
   - Aggregates outputs from all quality modules to generate a final per-image cleaning decision.
 
 - **Interactive Dashboard (Planned)**
@@ -210,7 +210,7 @@ image-cleaning-framework/
 
 ---
 
-### 8) Decision Engine *(Planned)*
+### 8) Decision Engine 
 - Aggregates outputs from all quality assessment modules.
 - Assigns a final quality status and recommended action for each image.
 
@@ -293,12 +293,11 @@ The framework projects 2048-dimensional ResNet50 embeddings into a lower-dimensi
 | Noise Detection | Completed |
 | Outlier Detection | Completed|
 | Mislabel Detection | Completed |
-| Decision Engine | Planned |
+| Decision Engine | Completed |
 | Streamlit Dashboard | Planned |
 
 ## Future Improvements
-
-- Build a Decision Engine for unified quality scoring.
+- Learn adaptive issue weights from validation feedback instead of using        manually assigned priorities.
 - Deploy an interactive Streamlit dashboard.
 - Add support for custom datasets through a web interface.
 - Optimize inference for large-scale datasets.
