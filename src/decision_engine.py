@@ -219,6 +219,11 @@ def build_master_report(split = "train"):
 
       print(f"  [{cls:10s}] total={total}  "
             f"clean={clean}  remove={remove}  review={review}")
+    
+    # ----- Save Master Report -----
+    master_path = f"{REPORTS_DIR}/{split}_master_report.csv"
+    master.to_csv(master_path, index=False)
+    print(f" Master report saved ==> {master_path}")
 
     # ── 13. Save cleaning summary
     summary = {
