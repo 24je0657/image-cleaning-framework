@@ -65,7 +65,8 @@ This project uses the **Animals Image Dataset** from Kaggle for training and eva
 
 - **Blur Detection**
   - Computes the Variance of Laplacian to measure image sharpness.
-  - Flags blurry images using a configurable threshold.
+  - Uses **adaptive per-class thresholds** derived from the **5th percentile** of each class's blur-score distribution.
+  - Automatically adjusts blur detection for different image characteristics across classes, improving robustness over a single global threshold.
 
 - **Noise Detection**
   - Utilizes a Convolutional Autoencoder trained on a clean subset of the dataset.
@@ -187,9 +188,28 @@ image-cleaning-framework/
 ---
 
 ### 4) Blur Detection
+
 - Measures image sharpness using the **Variance of Laplacian**.
-- Flags images with blur scores below a configurable threshold.
-- Produces detailed blur statistics for each class.
+- Computes blur scores for every image in the dataset.
+- Learns **adaptive per-class thresholds** using the **5th percentile** of each class's blur-score distribution.
+- Flags images whose blur score falls below the corresponding class threshold.
+- Generates detailed per-class blur statistics and threshold reports.
+
+#### Adaptive Blur Thresholding
+
+Instead of using a single global blur threshold, the framework automatically derives a separate threshold for each class based on the **5th percentile** of its Laplacian variance distribution.
+
+This accounts for natural differences in image texture (e.g., lion fur versus elephant skin) and makes blur detection more robust across heterogeneous datasets.
+
+**Example thresholds (Training Set):**
+
+| Class | Adaptive Threshold |
+|--------|-------------------:|
+| Cat | 94.7 |
+| Dog | 65.8 |
+| Elephant | 747.8 |
+| Horse | 192.6 |
+| Lion | 535.4 |
 
 ---
 
@@ -219,7 +239,7 @@ Images flagged by multiple methods receive higher confidence scores.
 ---
 
 ### 8) Decision Engine 
-- Aggregates outputs from all quality assessment modules.
+- Aggregates outputs from duplicate detection, adaptive blur detection, noise detection, outlier detection, and mislabel detection using a weighted scoring strategy to classify every image as CLEAN, REVIEW, or REMOVE.
 - Assigns a final quality status and recommended action for each image.
 
 ---
