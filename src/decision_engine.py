@@ -60,7 +60,7 @@ def build_master_report(split = "train"):
     )
     blur_df  = load_report(
         f"{REPORTS_DIR}/{split}_blur_report.csv",
-        ["file_path", "is_blurry", "blur_score"]
+        ["file_path","class", "blur_score", "threshold_used", "is_blurry"]
     )
     noise_df = load_report(
         f"{REPORTS_DIR}/{split}_noise_report.csv",
@@ -75,7 +75,7 @@ def build_master_report(split = "train"):
         ["file_path", "is_mislabeled", "confidence", "declared_class"]
     )
     # Use blur report as base .. since contains every image
-    master = blur_df[["file_path","class", "blur_score", "is_blurry"]].copy()
+    master = blur_df[["file_path","class", "blur_score", "threshold_used", "is_blurry"]].copy()
 
     # ----- Merge Duplicates -----
     if dup_df is not None :

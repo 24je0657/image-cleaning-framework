@@ -312,7 +312,7 @@ with tab_overview:
             "Issue": ["Exact dupes","Near dupes","Blurry",
                       "Noisy","Outlier","Mislabeled"],
             "Count": [
-                safe_sum("exact_duplicate"),
+                safe_sum("Exact_duplicates"),
                 safe_sum("near_duplicate"),
                 safe_sum("is_blurry"),
                 safe_sum("is_noisy"),
@@ -398,7 +398,7 @@ with tab_compare:
             "Original"       : [total,total,0,0,0,0,0,0,0,0],
             "After cleaning" : [
                 total, int(clean), int(remove), int(review),
-                safe_sum("exact_duplicate"),
+                safe_sum("Exact_duplicates"),
                 safe_sum("near_duplicate"),
                 safe_sum("is_blurry"),
                 safe_sum("is_noisy"),
@@ -558,16 +558,15 @@ with tab_quality:
 
     if qual_view == "Blurry images":
         blurry_df = qdf[qdf["is_blurry"]==True].sort_values("blur_score")
-        st.markdown(f"**{len(blurry_df)} blurry images** "
-                    f"(Laplacian < 100 · dataset mean = 2068)")
+        st.markdown( f"**{len(blurry_df)} blurry images** "
+                   "(Adaptive per-class threshold using 5th percentile)")
 
         fig_blur = px.histogram(
             qdf, x="blur_score", nbins=80,
             color_discrete_sequence=["#534AB7"],
             log_y=True, title="Blur score distribution (log scale)"
         )
-        fig_blur.add_vline(x=100, line_dash="dash", line_color="red",
-                           annotation_text="Threshold=100")
+        
         fig_blur.update_layout(height=250,
                                margin=dict(l=0,r=0,t=30,b=0))
         st.plotly_chart(fig_blur, width="stretch")
@@ -799,7 +798,7 @@ with tab_inspector:
 
                 st.markdown("#### 🔎 Issue breakdown")
                 flags = {
-                    "Exact duplicate" : (row.get("exact_duplicate",False), "🔴"),
+                    "Exact duplicate" : (row.get("Exact_duplicates",False), "🔴"),
                     "Near duplicate"  : (row.get("near_duplicate", False), "🔴"),
                     "Blurry"          : (row.get("is_blurry",      False), "🟠"),
                     "Noisy"           : (row.get("is_noisy",       False), "🟡"),
@@ -820,8 +819,10 @@ with tab_inspector:
 
                 if row.get("blur_score"):
                     st.markdown(
-                        f"**Blur score:** `{row['blur_score']:.2f}` "
-                        f"(threshold: 100)")
+                       f"**Blur score:** `{row['blur_score']:.2f}` "
+                       f"(threshold: {row['threshold_used']:.2f})"
+                     )
+                    
                 if row.get("reconstruction_error"):
                     st.markdown(
                         f"**Noise error:** `{row['reconstruction_error']:.4f}`")
@@ -910,15 +911,15 @@ with tab_analytics:
             "Module"       : "Duplicate Detector",
             "Method"       : "pHash + cosine ≥ 0.97",
             "Input"        : f"{total:,} images",
-            "Flagged"      : str(safe_sum("exact_duplicate")
+            "Flagged"      : str(safe_sum("Exact_duplicates")
                                   + safe_sum("near_duplicate")),
-            "Flag %"       : f"{safe_pct('exact_duplicate') + safe_pct('near_duplicate'):.2f}%",
+            "Flag %"       : f"{safe_pct('Exact_duplicates') + safe_pct('near_duplicate'):.2f}%",
             "Report"       : f"reports/{split}_duplicates_report.csv",
             "Status"       : "✅ Complete"
         },
         {
             "Module"       : "Blur Detector",
-            "Method"       : "Laplacian variance < 100",
+            "Method": "Adaptive Laplacian variance (5th percentile per class)",
             "Input"        : f"{total:,} images",
             "Flagged"      : str(safe_sum("is_blurry")),
             "Flag %"       : f"{safe_pct('is_blurry'):.2f}%",
@@ -1057,10 +1058,6 @@ with tab_analytics:
                 error_y=None,
                 title="Mean blur score by class"
             )
-            fig_blur_cls.add_hline(
-                y=100, line_dash="dash", line_color="red",
-                annotation_text="Blur threshold (100)"
-            )
             fig_blur_cls.update_layout(
                 showlegend=False, height=280,
                 margin=dict(l=0,r=0,t=30,b=0),
@@ -1069,9 +1066,9 @@ with tab_analytics:
             st.plotly_chart(fig_blur_cls, width="stretch")
 
             global_blur_mean = safe_mean("blur_score")
-            st.info(f"📊 Global mean blur score: **{global_blur_mean}**  "
-                    f"(threshold: 100 · dataset is **"
-                    f"{'sharp ✅' if global_blur_mean > 500 else 'borderline ⚠️'}**)")
+            st.info(f"📊 Global mean blur score: **{global_blur_mean:.2f}**\n\n"
+                  "Blur detection uses adaptive per-class thresholds "
+                 "(5th percentile).")
 
         # Average reconstruction error per class
         st.markdown("#### Average reconstruction error per class")
