@@ -8,4 +8,4 @@ embeddings/*.npy
 reports/*.csv
 models/*.pth
 .streamlit/
-
+verification/

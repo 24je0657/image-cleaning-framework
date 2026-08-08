@@ -15,65 +15,111 @@ os.makedirs(REPORTS_DIR, exist_ok=True)  # Create the reports directory if it do
 
 # ----- Exact Duplicate Detection -----
 
-def compute_phash(image_path):
-    """Compute the Perceptual Hash Of one image."""
+def compute_multi_hash(image_path):
+    """
+    Compute 4 perceptual hash types.
+    Each captures different transformation invariances:
+      phash  → DCT-based, robust to compression/brightness
+      dhash  → gradient-based, robust to contrast changes
+      whash  → wavelet-based, robust to minor crops
+      ahash  → average-based, fastest, least robust
+    Returns dict of hashes or None if image unreadable.
+    """
     try:
         img = Image.open(image_path).convert("RGB")
-        return str(imagehash.phash(img))
+        return {
+            "phash" : imagehash.phash(img),
+            "dhash" : imagehash.dhash(img),
+            "whash" : imagehash.whash(img),
+            "ahash" : imagehash.average_hash(img),
+        }
     except Exception as e:
-        print(f"Hash Failed for {image_path}: {e}")
+        print(f"  Hash failed for {image_path}: {e}")
         return None
+
+
+def hashes_match(h1: dict, h2: dict, threshold: int = HASH_THRESHOLD) -> bool:
+    """
+    Two images are duplicates when atleast 2 out of pHash + (dHash OR wHash OR aHash) matches
+    within hamming threshold.
+    Catches more transformation variants than single hash.
+    """
+
+
+    phash_match = (
+        abs(h1["phash"] - h2["phash"]) <= threshold
+    )
+
+    if not phash_match:
+        return False
+
+    supporting_matches = sum([
+        abs(h1["dhash"] - h2["dhash"]) <= threshold,
+        abs(h1["whash"] - h2["whash"]) <= threshold,
+        abs(h1["ahash"] - h2["ahash"]) <= threshold
+    ])
+
+    return supporting_matches >= 1
+    
     
 def Find_Exact_Duplicates(paths_array, split = "train"):
-    """Group Images with Identical Hashes -> Exact Duplicates."""
+    """Multi-hash duplicate detection.
+    Flags image pair if any hash type matches within threshold.
+    """
     print(f"\n{'='*30}")
     print(f"Exact Duplicate Detection for {split} set")
     print(f"\n{'='*30}")
 
-    hash_map = {}
+    hashes = {}
     records = []
 
     for idx, path in enumerate(paths_array):
-        phash = compute_phash(path)
-        if phash is None:
+        h = compute_multi_hash(path)
+        if h is None:
             continue
+        hashes[str(path)] = h
+        records.append({"file_path":str(path)})
 
-        if phash not in hash_map:
-            hash_map[phash] = []
-
-        hash_map[phash].append(path)
-        records.append({"file_path": path, "phash": phash})
 
         if(idx + 1) % 1000 == 0:
             print(f"Hashed {idx + 1}/{len(paths_array)} images")
 
         
-    # ----- Find groups with more than one image (duplicates) -----
-    duplicate_groups = {}
-    for h , ps in hash_map.items():
-        if len(ps) > 1:
-            duplicate_groups[h] = ps
+    # ----- Compare all pairs using multi-hash voting -----
+    paths_list = list(hashes.keys())
+    n =  len(paths_list)
+    flagged = {}
+    for i in range(n):
+        if paths_list[i] in flagged:
+            continue
+        for j in range(i+1,n):
+            if paths_list[j] in flagged:
+                continue 
+            if hashes_match(hashes[paths_list[i]],hashes[paths_list[j]]):
+                flagged[paths_list[j]] = paths_list[i]
 
     print(f"\n Total Images Processed: {len(paths_array)}")
-    print(f" Duplicate Groups Found: {len(duplicate_groups)}")
+    print(f" Duplicate Images Found: {len(flagged)}")
 
-    total_dup = sum(len(v)-1 for v in duplicate_groups.values())
-    print(f" Total Duplicate Images found: {total_dup}")
 
     # ----- Build a DataFrame for reporting -----
     df = pd.DataFrame(records)
     df["Exact_duplicates"] = False
     df["duplicate_of"] = None
 
-    for phash, group_paths in duplicate_groups.items():
-        keep = group_paths[0]  # Keep the first image in the group
-        remove = group_paths[1:]  # Mark the rest as duplicates
+    for duplicate_path, original_path in flagged.items():
+        df.loc[
+            df["file_path"] == duplicate_path,
+            "Exact_duplicates"
+        ] = True
 
-        for p in remove:
-            df.loc[df["file_path"] == p, "Exact_duplicates"] = True
-            df.loc[df["file_path"] == p, "duplicate_of"] = keep
+        df.loc[
+            df["file_path"] == duplicate_path,
+            "duplicate_of"
+        ] = original_path
+    
 
-    return df, duplicate_groups
+    return df, flagged
 
 
 # ---- Near Duplicate Detection(COSINE_SIMILARITY) -----
