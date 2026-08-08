@@ -4,7 +4,7 @@ import imagehash
 from PIL import Image
 from pathlib import Path
 from sklearn.metrics.pairwise import cosine_similarity
-from embeddings import load_embeddings
+from src.embeddings import load_embeddings
 import os
 
 from pybktree import BKTree
