@@ -7,6 +7,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 from embeddings import load_embeddings
 import os
 
+from pybktree import BKTree
+import time
+
+
+
 HASH_THRESHOLD = 5  # Hamming distance threshold for image hash comparison
 COSINE_THRESHOLD = 0.97  # Cosine similarity threshold for embedding comparison
 REPORTS_DIR = "reports"  # Directory to save the duplicate reports
@@ -60,64 +65,239 @@ def hashes_match(h1: dict, h2: dict, threshold: int = HASH_THRESHOLD) -> bool:
     ])
 
     return supporting_matches >= 1
-    
-    
-def Find_Exact_Duplicates(paths_array, split = "train"):
-    """Multi-hash duplicate detection.
-    Flags image pair if any hash type matches within threshold.
-    """
-    print(f"\n{'='*30}")
-    print(f"Exact Duplicate Detection for {split} set")
-    print(f"\n{'='*30}")
+# ─── BK-TREE HELPERS ──────────────────────────────────────────
 
-    hashes = {}
-    records = []
+def phash_hamming(item1: tuple, item2: tuple) -> int:
+    """
+    Hamming distance between two (phash_int, file_path) tuples.
+    """
+    return bin(item1[0] ^ item2[0]).count("1")
+
+
+def build_phash_bktree(hashes_dict: dict) -> BKTree:
+    """
+    Build a BK-tree using pHash as the search key.
+
+    The BK-tree is only used for candidate retrieval.
+    Final duplicate verification is still performed using
+    the existing multi-hash rule.
+    """
+
+    items = []
+
+    for path, hashes in hashes_dict.items():
+
+        # Convert ImageHash -> hexadecimal string -> integer
+        phash_int = int(str(hashes["phash"]), 16)
+
+        items.append(
+            (phash_int, path)
+        )
+
+    return BKTree(
+        phash_hamming,
+        items
+    )
+
+
+def query_bktree(
+    tree: BKTree,
+    hashes_dict: dict,
+    threshold: int = HASH_THRESHOLD
+) -> dict:
+    """
+    Query every image against the pHash BK-tree.
+
+    The BK-tree returns candidates whose pHash is within
+    the specified Hamming distance.
+
+    Each candidate is then checked using the existing
+    multi-hash duplicate rule.
+    """
+
+    flagged = {}
+
+    paths_list = list(hashes_dict.keys())
+
+    for path in paths_list:
+
+        if path in flagged:
+            continue
+
+        # Convert ImageHash -> hexadecimal string -> integer
+        phash_int = int(
+            str(hashes_dict[path]["phash"]),
+            16
+        )
+
+        query = (
+            phash_int,
+            path
+        )
+
+        candidates = tree.find(
+            query,
+            threshold
+        )
+
+        for dist, (cand_phash_int, cand_path) in candidates:
+
+            # Don't compare image with itself
+            if cand_path == path:
+                continue
+
+            # Already marked as duplicate
+            if cand_path in flagged:
+                continue
+
+            # Existing validated rule:
+            # pHash + at least one supporting hash
+            if hashes_match(
+                hashes_dict[path],
+                hashes_dict[cand_path]
+            ):
+                flagged[cand_path] = path
+
+    return flagged
+    
+    
+def Find_Exact_Duplicates(paths_array, split="train"):
+    """
+    Production duplicate detection using a BK-tree.
+
+    Precision validation:
+      v1 — any 2-of-4, threshold=5
+            68% observed precision (34/50)
+
+      v2 — pHash + 1 corroborating hash
+            100% observed precision (50/50)
+
+    Current approach:
+      v3 — BK-tree indexed on pHash
+
+    Pipeline:
+      Step 1 — Hash all images
+      Step 2 — Build BK-tree on pHash
+      Step 3 — Query BK-tree for pHash candidates
+      Step 4 — Verify candidates using the
+               validated multi-hash rule
+
+    Duplicate rule:
+      pHash required + at least one corroborating hash.
+
+    The BK-tree is only used to improve candidate retrieval.
+    """
+
+    print(f"\n{'=' * 30}")
+    print(f"Exact Duplicate Detection — {split}")
+    print(f"{'=' * 30}")
+
+    print("Method    : BK-tree on pHash + multi-hash verification")
+    print(f"Threshold : Hamming <= {HASH_THRESHOLD}")
+    print("Rule      : pHash required + 1 corroborating hash")
+
+    # ============================================================
+    # Step 1 — Compute hashes
+    # ============================================================
+
+    hashes_dict = {}
 
     for idx, path in enumerate(paths_array):
+
         h = compute_multi_hash(path)
-        if h is None:
-            continue
-        hashes[str(path)] = h
-        records.append({"file_path":str(path)})
 
+        if h is not None:
+            hashes_dict[str(path)] = h
 
-        if(idx + 1) % 1000 == 0:
-            print(f"Hashed {idx + 1}/{len(paths_array)} images")
+        if (idx + 1) % 1000 == 0:
+            print(
+                f"  Hashed {idx + 1:,}/{len(paths_array):,}"
+            )
 
-        
-    # ----- Compare all pairs using multi-hash voting -----
-    paths_list = list(hashes.keys())
-    n =  len(paths_list)
-    flagged = {}
-    for i in range(n):
-        if paths_list[i] in flagged:
-            continue
-        for j in range(i+1,n):
-            if paths_list[j] in flagged:
-                continue 
-            if hashes_match(hashes[paths_list[i]],hashes[paths_list[j]]):
-                flagged[paths_list[j]] = paths_list[i]
+    print(
+        f"\n  Hashing complete     : "
+        f"{len(hashes_dict):,} images"
+    )
 
-    print(f"\n Total Images Processed: {len(paths_array)}")
-    print(f" Duplicate Images Found: {len(flagged)}")
+    # ============================================================
+    # Step 2 — Build BK-tree
+    # ============================================================
 
+    tree = build_phash_bktree(hashes_dict)
 
-    # ----- Build a DataFrame for reporting -----
-    df = pd.DataFrame(records)
+    print("  BK-tree built successfully")
+
+    # ============================================================
+    # Step 3 + 4 — Query + multi-hash verification
+    # ============================================================
+
+    flagged = query_bktree(
+        tree,
+        hashes_dict,
+        HASH_THRESHOLD
+    )
+
+    print(
+        f"  Hash-level flagged   : "
+        f"{len(flagged):,}"
+    )
+
+    # ============================================================
+    # Summary
+    # ============================================================
+
+    n_total = len(paths_array)
+
+    print(
+        f"\n── Summary ────────────────────────────────────────"
+    )
+
+    print(
+        f"  Total images        : "
+        f"{n_total:,}"
+    )
+
+    print(
+        f"  Duplicates found    : "
+        f"{len(flagged):,}"
+    )
+
+    print(
+        f"\n── Validation History ────────────────────────────"
+    )
+
+    print(
+        "  v1 (2-of-4)         : "
+        "68% observed precision (34/50)"
+    )
+
+    print(
+        "  v2 (pHash anchor)   : "
+        "100% observed precision (50/50)"
+    )
+
+    print(
+        "  Current rule        : "
+        "pHash + 1 corroborating hash"
+    )
+
+    # ============================================================
+    # Build report
+    # ============================================================
+
+    df = pd.DataFrame({
+        "file_path": list(hashes_dict.keys())
+    })
+
     df["Exact_duplicates"] = False
     df["duplicate_of"] = None
 
-    for duplicate_path, original_path in flagged.items():
-        df.loc[
-            df["file_path"] == duplicate_path,
-            "Exact_duplicates"
-        ] = True
+    # Replace the entire loop + df construction with this
+    df = pd.DataFrame({"file_path": list(hashes_dict.keys())})
 
-        df.loc[
-            df["file_path"] == duplicate_path,
-            "duplicate_of"
-        ] = original_path
-    
+    # Single-pass map — O(n) not O(n × flagged)
+    df["Exact_duplicates"] = df["file_path"].isin(flagged)
+    df["duplicate_of"]     = df["file_path"].map(flagged)
 
     return df, flagged
 
