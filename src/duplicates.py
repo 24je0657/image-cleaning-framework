@@ -4,7 +4,10 @@ import imagehash
 from PIL import Image
 from pathlib import Path
 from sklearn.metrics.pairwise import cosine_similarity
-from src.embeddings import load_embeddings
+try:
+    from src.embeddings import load_embeddings
+except ModuleNotFoundError:
+    from embeddings import load_embeddings
 import os
 
 from pybktree import BKTree
@@ -13,7 +16,12 @@ import time
 
 
 HASH_THRESHOLD = 5  # Hamming distance threshold for image hash comparison
-COSINE_THRESHOLD = 0.97  # Cosine similarity threshold for embedding comparison
+# Confidence Band
+COSINE_BANDS = {
+    "DEFINITE" : 0.99,   # auto-remove
+    "LIKELY"   : 0.97,   # flag for REMOVE
+    "POSSIBLE" : 0.93,   # flag for REVIEW only
+}
 REPORTS_DIR = "reports"  # Directory to save the duplicate reports
 os.makedirs(REPORTS_DIR, exist_ok=True)  # Create the reports directory if it doesn't exist
 
@@ -305,9 +313,17 @@ def Find_Exact_Duplicates(paths_array, split="train"):
 # ---- Near Duplicate Detection(COSINE_SIMILARITY) -----
 
 def Find_Near_Duplicates(embeddings, paths_array, split = "train"):
-    """Compute Pairwise Cosine Similarity on ResNet50 Embeddings.
-    Flag Pairs above the COSINE_THRESHOLD as Near Duplicates.
-    Use chunking to avoid memory issues for large datasets."""
+    """
+    Three-tier near-duplicate detection using confidence bands.
+
+    DEFINITE  (≥0.99) → REMOVE automatically
+    LIKELY    (≥0.97) → flag for REMOVE
+    POSSIBLE  (≥0.93) → flag for REVIEW only
+
+    This replaces the binary flag/no-flag decision with
+    a graded confidence score that the Decision Engine
+    can weight appropriately.
+    """
 
     print(f"\n{'='*30}")
     print(f"Near Duplicate Detection for {split} set")
@@ -328,16 +344,22 @@ def Find_Near_Duplicates(embeddings, paths_array, split = "train"):
         for i, row in enumerate(similarity_matrix):
             global_i = start + i
             for j, score in enumerate(row):
-                if j <= global_i:
+                if j <= global_i :
                     continue  # Avoid self-comparison and duplicate pairs
-                if score >= COSINE_THRESHOLD:
-                    if global_i not in flagged:
-                        flagged.add(j)
-                        records.append({
-                            "file_path": paths_array[j],
-                            "near_duplicate_of": paths_array[global_i],
-                            "cosine_score": round(float(score), 4),
-                            "near_duplicate": True
+                if score >= COSINE_BANDS["POSSIBLE"]:
+                    if score >= COSINE_BANDS["DEFINITE"]:
+                        confidence = "DEFINITE"
+                    elif score >= COSINE_BANDS["LIKELY"]:
+                        confidence = "LIKELY"
+                    else :
+                        confidence = "POSSIBLE"
+                    flagged.add(j)
+                    records.append({
+                         "file_path": paths_array[j],
+                        "near_duplicate_of": paths_array[global_i],
+                        "cosine_score": round(float(score), 4),
+                        "near_duplicate": True,
+                        "dup_confidence":confidence,
                         })
 
         if(start + chunk_size) % 2000 == 0:
@@ -347,8 +369,12 @@ def Find_Near_Duplicates(embeddings, paths_array, split = "train"):
 
     df_near = pd.DataFrame(records) if records else pd.DataFrame(
         columns=["file_path", "near_duplicate_of", "cosine_score", 
-                 "near_duplicate"]
+                 "near_duplicate","dup_confidence"]
     )
+    if len(df_near) > 0:
+       for tier in ["DEFINITE","LIKELY","POSSIBLE"]:
+          count = (df_near["dup_confidence"] == tier).sum()
+          print(f"    {tier:10s}: {count}")
 
     return df_near , flagged
 
@@ -366,21 +392,59 @@ if __name__ == "__main__":
         df_near, near_flagged = Find_Near_Duplicates(embeddings, paths_array, split)
 
         # ----- Merge both reports  -----
+
         df_combined = df_exact.copy()
+
         if not df_near.empty:
-            df_combined["near_duplicate"] = df_combined["file_path"].isin(
-                df_near["file_path"]
+
+        # Keep the strongest near-duplicate evidence for each image
+            confidence_rank = {
+                "POSSIBLE": 1,
+                "LIKELY": 2,
+                "DEFINITE": 3
+            }
+
+            df_near["confidence_rank"] = (
+                df_near["dup_confidence"].map(confidence_rank)
             )
-            df_combined["cosine_score"] = df_combined["file_path"].map(
-                df_near.set_index("file_path")["cosine_score"]
+
+            df_near_best = (
+                df_near
+                .sort_values(
+                    ["file_path", "confidence_rank", "cosine_score"],
+                    ascending=[True, False, False]
+                )
+                .drop_duplicates(
+                    subset=["file_path"],
+                    keep="first"
+                )
             )
-            df_combined["near_duplicate_of"] = df_combined["file_path"].map(
-                df_near.set_index("file_path")["near_duplicate_of"]
+
+            # Merge the strongest near-duplicate evidence
+            # into the image-level master report
+            df_combined = df_combined.merge(
+                df_near_best[
+                    [
+                        "file_path",
+                        "cosine_score",
+                        "near_duplicate_of",
+                        "dup_confidence"
+                    ]
+                ],
+                on="file_path",
+                how="left"
             )
+
+            df_combined["near_duplicate"] = (
+                df_combined["cosine_score"].notna()
+            )
+
         else:
+
             df_combined["near_duplicate"] = False
             df_combined["cosine_score"] = np.nan
             df_combined["near_duplicate_of"] = np.nan
+            df_combined["dup_confidence"] = np.nan
 
         # ----- Save the report -----
         out_path = f"{REPORTS_DIR}/{split}_duplicates_report.csv"
