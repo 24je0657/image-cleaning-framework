@@ -21,6 +21,7 @@ REPORTS_DIR = "reports"
 VALID_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 BLUR_THRESHOLD = 100.0 # Below this it is Blurry (tune if needed)
 os.makedirs(REPORTS_DIR, exist_ok = True)
+CONTAMINATION_LIMIT = 0.30
 
 
 # =============================
@@ -68,15 +69,23 @@ def compute_blur_score(image_path):
 # ----- Dataset-Level Blur Detection -----
 def detect_blur(split="train", use_adaptive=True, percentile=5):
     """
-    Walk through Animal/<split>/<class> and compute blur score
-    for every image. Save report to reports/<split>_blur_report.csv
+    Two-pass blur detection with contamination guard.
 
-    use_adaptive=True  → per-class percentile threshold (recommended)
-                         Respects natural sharpness differences between classes.
-                         e.g. elephant skin texture has higher baseline than dog.
-    use_adaptive=False → global threshold (BLUR_THRESHOLD = 100.0)
-                         Simple but unfair across classes with different textures.
-    percentile         → bottom N% of each class flagged as blurry (default 5%)
+    Pass 1:
+        Compute blur scores for all images.
+
+    Pass 2:
+        If adaptive mode is enabled:
+            - Estimate contamination per class using
+              the global BLUR_THRESHOLD.
+            - If contamination > 30%, use global threshold.
+            - Otherwise, use class-specific percentile threshold.
+
+        If adaptive mode is disabled:
+            - Use global BLUR_THRESHOLD for all images.
+
+    This prevents an overly blurry class from causing its
+    adaptive threshold to become too lenient.
     """
     split_path = Path(ROOT_DIR) / split
     records    = []
@@ -86,16 +95,16 @@ def detect_blur(split="train", use_adaptive=True, percentile=5):
     print(f"Blur detection - {split.upper()} Set")
     print(f"{'='*30}")
     print(f"Classes   - {classes}")
-    print(f"Mode      - {'Adaptive per-class' if use_adaptive else 'Global'}")
+    print(f"Mode      - {'Adaptive(two pass) per-class' if use_adaptive else 'Global'}")
     if not use_adaptive:
         print(f"Threshold - {BLUR_THRESHOLD}")
 
-    # ── First pass: collect all scores
+    # ── First pass: collect all Blur scores
     for class_name in classes:
         class_dir = split_path / class_name
         img_files = sorted([
             f for f in class_dir.iterdir()
-            if f.is_file() and f.suffix.lower() in VALID_EXTENSIONS  # ← fixed
+            if f.is_file() and f.suffix.lower() in VALID_EXTENSIONS  
         ])
 
         print(f"Processing {class_name} - {len(img_files)} images")
@@ -116,52 +125,155 @@ def detect_blur(split="train", use_adaptive=True, percentile=5):
 
     df = pd.DataFrame(records)
 
-    # ── Second pass: apply threshold
+    # ── Second pass: Choose threshold
     if use_adaptive:
-        # Per-class percentile threshold
-        # Bottom N% of EACH class flagged — respects natural sharpness baseline
-        class_thresholds = (
-            df.groupby("class")["blur_score"]
-              .quantile(percentile / 100)
-              .to_dict()
+        
+        class_thresholds = {}
+        threshold_methods = {}
+        print(
+            f"\n── Contamination Check "
+            f"(global threshold={BLUR_THRESHOLD}) ──"
         )
 
-        print(f"\n── Adaptive thresholds (p{percentile} per class) ──────────")
-        for cls, thresh in class_thresholds.items():
-            n_flagged = (df[df["class"] == cls]["blur_score"] < thresh).sum()
-            print(f"  [{cls:10s}]  threshold={thresh:8.1f}  "
-                  f"flagged={n_flagged}")
+        for cls in df["class"].unique():
 
-        df["threshold_used"] = df["class"].map(class_thresholds)
-        df["is_blurry"]      = df["blur_score"] < df["threshold_used"]
+            cls_scores = df[
+                df["class"] == cls
+            ]["blur_score"]
+
+            # Estimate how much of this class falls below
+            # the global blur threshold.
+            contamination_rate = (
+                cls_scores < BLUR_THRESHOLD
+            ).mean()
+
+            if contamination_rate > CONTAMINATION_LIMIT:
+
+                # Class is potentially contaminated.
+                # Do not allow the adaptive threshold to
+                # become too lenient.
+                threshold = BLUR_THRESHOLD
+
+                threshold_methods[cls] = "global_fallback"
+
+                print(
+                    f"  [{cls:10s}] "
+                    f"contamination="
+                    f"{contamination_rate:.0%} "
+                    f"> {CONTAMINATION_LIMIT:.0%} "
+                    f"→ GLOBAL fallback "
+                    f"({threshold})"
+                )
+            
+            else:
+
+                # Class is sufficiently clean.
+                # Adaptive percentile threshold is safe.
+                threshold = cls_scores.quantile(
+                    percentile / 100
+                )
+
+                threshold_methods[cls] = (
+                    "adaptive_percentile"
+                )
+
+                print(
+                    f"  [{cls:10s}] "
+                    f"contamination="
+                    f"{contamination_rate:.0%} "
+                    f"≤ {CONTAMINATION_LIMIT:.0%} "
+                    f"→ adaptive p{percentile} "
+                    f"({threshold:.1f})"
+                )
+            class_thresholds[cls] = round(
+                threshold,
+                2
+            )
+
+        df["threshold_used"] = df[
+            "class"
+        ].map(class_thresholds)
+
+        df["threshold_method"] = df[
+            "class"
+        ].map(threshold_methods)
 
     else:
-        # Original global threshold
-        df["threshold_used"] = BLUR_THRESHOLD
-        df["is_blurry"]      = df["blur_score"] < BLUR_THRESHOLD
 
-    # ── Per class statistics
-    print(f"\n ----- Per class Blur Statistics -----")
+        df["threshold_used"] = BLUR_THRESHOLD
+        df["threshold_method"] = "global"
+        # ============================================================
+    # Final blur decision
+    # ============================================================
+
+    df["is_blurry"] = (
+        df["blur_score"]
+        < df["threshold_used"]
+    )
+
+    # ============================================================
+    # Per-class statistics
+    # ============================================================
+
+    print(
+        f"\n----- Per Class Blur Statistics -----"
+    )
+
     stats = df.groupby("class").agg(
-        total        = ("blur_score", "count"),
-        blurry_count = ("is_blurry",  "sum"),
-        mean_score   = ("blur_score", "mean"),
-        min_score    = ("blur_score", "min"),
-        max_score    = ("blur_score", "max"),
-        threshold    = ("threshold_used", "first")      # ← shows per-class threshold
+        total=("blur_score", "count"),
+        blurry_count=("is_blurry", "sum"),
+        mean_score=("blur_score", "mean"),
+        min_score=("blur_score", "min"),
+        max_score=("blur_score", "max"),
+        threshold=("threshold_used", "first"),
+        method=("threshold_method", "first")
     ).reset_index()
 
-    stats["blurry_%"] = (stats["blurry_count"] / stats["total"] * 100).round(2)
-    print(stats.to_string(index=False))
+    stats["blurry_%"] = (
+        stats["blurry_count"]
+        / stats["total"]
+        * 100
+    ).round(2)
 
-    # ── Overall summary
+    print(
+        stats.to_string(index=False)
+    )
+
+    # ============================================================
+    # Overall summary
+    # ============================================================
+
     total_blurry = df["is_blurry"].sum()
-    print(f"\n ----- Overall Summary -----")
-    print(f" Total images  : {len(df)}")
-    print(f" Blurry images : {total_blurry} ({100 * total_blurry / len(df):.2f}%)")
-    print(f" Mean Score    : {df['blur_score'].mean():.2f}")    
-    print(f" Min Score     : {df['blur_score'].min():.2f}")     
-    print(f" Max Score     : {df['blur_score'].max():.2f}")     
+
+    print(
+        f"\n----- Overall Summary -----"
+    )
+
+    print(
+        f" Total images  : {len(df)}"
+    )
+
+    print(
+        f" Blurry images : "
+        f"{total_blurry} "
+        f"({100 * total_blurry / len(df):.2f}%)"
+    )
+
+    print(
+        f" Mean Score    : "
+        f"{df['blur_score'].mean():.2f}"
+    )
+
+    print(
+        f" Min Score     : "
+        f"{df['blur_score'].min():.2f}"
+    )
+
+    print(
+        f" Max Score     : "
+        f"{df['blur_score'].max():.2f}"
+    )
+
 
     # ── Save report
     out_path = f"{REPORTS_DIR}/{split}_blur_report.csv"
