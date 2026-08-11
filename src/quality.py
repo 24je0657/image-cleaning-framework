@@ -462,31 +462,347 @@ def detect_noise(split = "train"):
     return df
 
 # ===========================
+# ===========================
+# Noise Refinement
+# ===========================
+
+def refine_noise_flags(split="train"):
+    """
+    Refine AutoEncoder noise flags using independent blur and
+    outlier evidence.
+
+    Decision logic:
+
+    1. High reconstruction error + blurry
+       -> CONFIRMED_NOISY
+
+    2. High reconstruction error + borderline blur
+       -> REVIEW_NOISE
+
+    3. High reconstruction error + sharp + outlier
+       -> REVIEW_OOD_OR_NOISE
+
+    4. High reconstruction error + sharp + not outlier
+       -> REVIEW_POSSIBLE_OOD
+
+    The system does NOT automatically classify sharp images as OOD.
+    They are treated as ambiguous cases requiring review.
+    """
+
+    noise_path   = f"{REPORTS_DIR}/{split}_noise_report.csv"
+    blur_path    = f"{REPORTS_DIR}/{split}_blur_report.csv"
+    outlier_path = f"{REPORTS_DIR}/{split}_outliers_report.csv"
+
+    if not os.path.exists(noise_path):
+        print("Noise report not found — run detect_noise() first")
+        return None
+
+    noise_df = pd.read_csv(noise_path)
+
+    # ── Merge blur scores and adaptive thresholds ──────────────
+    if os.path.exists(blur_path):
+
+        blur_df = pd.read_csv(blur_path)[
+            ["file_path", "blur_score", "threshold_used"]
+        ]
+
+        noise_df = noise_df.merge(
+            blur_df,
+            on="file_path",
+            how="left"
+        )
+
+    else:
+
+        noise_df["blur_score"] = np.nan
+        noise_df["threshold_used"] = np.nan
+
+    # ── Merge outlier flags ────────────────────────────────────
+    if os.path.exists(outlier_path):
+
+        out_df = pd.read_csv(outlier_path)[
+            ["file_path", "is_outlier"]
+        ]
+
+        noise_df = noise_df.merge(
+            out_df,
+            on="file_path",
+            how="left"
+        )
+
+    else:
+
+        noise_df["is_outlier"] = False
+
+    noise_df["is_outlier"] = (
+        noise_df["is_outlier"]
+        .fillna(False)
+        .astype(bool)
+    )
+
+    # ── Calculate blur ratio ───────────────────────────────────
+    # Compares an image's blur score with its own class baseline.
+    #
+    # < 1.0  -> below class blur threshold
+    # 1 - 2   -> borderline
+    # > 2.0   -> relatively sharp
+
+    noise_df["blur_ratio"] = np.where(
+        noise_df["threshold_used"] > 0,
+        noise_df["blur_score"] / noise_df["threshold_used"],
+        np.nan
+    )
+
+    # ── Refine individual noise verdict ────────────────────────
+    def refined_verdict(row):
+
+        # Image was not originally flagged by AutoEncoder
+        if not row["is_noisy"]:
+            return False, "not_flagged"
+
+        blur_ratio = row.get("blur_ratio")
+        is_outlier = bool(row.get("is_outlier", False))
+
+        # If blur information is unavailable,
+        # do not make an aggressive decision.
+        if pd.isna(blur_ratio):
+
+            if is_outlier:
+                return True, "review_ood_or_noise"
+
+            return False, "review_insufficient_evidence"
+
+        # ──────────────────────────────────────────────────────
+        # CASE 1:
+        # Reconstruction error is high and image is below
+        # its class-specific blur threshold.
+        #
+        # Strongest evidence of genuine image degradation.
+        # ──────────────────────────────────────────────────────
+        if blur_ratio < 1.0:
+
+            return True, "confirmed_noisy"
+
+        # ──────────────────────────────────────────────────────
+        # CASE 2:
+        # Image is close to its blur threshold.
+        #
+        # Evidence is ambiguous, so send for review.
+        # ──────────────────────────────────────────────────────
+        if blur_ratio < 2.0:
+
+            return True, "review_noise"
+
+        # ──────────────────────────────────────────────────────
+        # CASE 3:
+        # Image is relatively sharp AND unusual according
+        # to the outlier detector.
+        #
+        # Could be OOD or genuine noise.
+        # Do not automatically remove.
+        # ──────────────────────────────────────────────────────
+        if is_outlier:
+
+            return True, "review_ood_or_noise"
+
+        # ──────────────────────────────────────────────────────
+        # CASE 4:
+        # High reconstruction error but image is relatively
+        # sharp and not an outlier.
+        #
+        # AutoEncoder may be reacting to unusual content,
+        # pose, background, or another distributional property.
+        #
+        # Do NOT call it definitely OOD.
+        # Send it for review.
+        # ──────────────────────────────────────────────────────
+        return False, "review_possible_ood"
+
+    # ── Apply refinement ───────────────────────────────────────
+    results = noise_df.apply(
+        lambda r: refined_verdict(r),
+        axis=1
+    )
+
+    noise_df["is_noisy_refined"] = results.apply(
+        lambda x: x[0]
+    )
+
+    noise_df["noise_verdict"] = results.apply(
+        lambda x: x[1]
+    )
+
+    # ── Summary ────────────────────────────────────────────────
+    original = int(
+        noise_df["is_noisy"].sum()
+    )
+
+    refined = int(
+        noise_df["is_noisy_refined"].sum()
+    )
+
+    confirmed_noisy = int(
+        (
+            noise_df["noise_verdict"]
+            == "confirmed_noisy"
+        ).sum()
+    )
+
+    review_noise = int(
+        (
+            noise_df["noise_verdict"]
+            == "review_noise"
+        ).sum()
+    )
+
+    review_ood_or_noise = int(
+        (
+            noise_df["noise_verdict"]
+            == "review_ood_or_noise"
+        ).sum()
+    )
+
+    review_possible_ood = int(
+        (
+            noise_df["noise_verdict"]
+            == "review_possible_ood"
+        ).sum()
+    )
+
+    print(
+        f"\n── Noise Refinement ───────────────────────────────"
+    )
+
+    print(
+        f"  Original AE flags       : {original}"
+    )
+
+    print(
+        f"  Confirmed noisy         : {confirmed_noisy}"
+    )
+
+    print(
+        f"  Review — noise          : {review_noise}"
+    )
+
+    print(
+        f"  Review — OOD/noise      : {review_ood_or_noise}"
+    )
+
+    print(
+        f"  Review — possible OOD   : {review_possible_ood}"
+    )
+
+    print(
+        f"  Final noisy/review      : {refined}"
+    )
+
+    print(
+        f"\n── Verdict Distribution ───────────────────────────"
+    )
+
+    verdicts = noise_df[
+        "noise_verdict"
+    ].value_counts()
+
+    for v, c in verdicts.items():
+
+        print(
+            f"  {v:30s}: {c}"
+        )
+
+    # ── Save refined report ───────────────────────────────────
+    out_path = (
+        f"{REPORTS_DIR}/{split}_noise_report.csv"
+    )
+
+    noise_df.to_csv(
+        out_path,
+        index=False
+    )
+
+    print(
+        f"\n✅ Refined noise report saved → {out_path}"
+    )
+
+    return noise_df
 
 
 
 # ----- Main Execution -----
 
 if __name__ == "__main__":
-    # Blur Detection
-    for split in ["train","val"]:
+
+    # ── Blur Detection ─────────────────────────────────────────
+    for split in ["train", "val"]:
+
         df_blur = detect_blur(split)
 
-        print(f" \n Top 10 Blurriest Images [{split.upper()}]")
+        print(
+            f"\n Top 10 Blurriest Images "
+            f"[{split.upper()}]"
+        )
 
-        top_blur = df_blur.nsmallest(10, "blur_score")[
-            ["file_path" , "class", "blur_score"]
+        top_blur = df_blur.nsmallest(
+            10,
+            "blur_score"
+        )[
+            ["file_path", "class", "blur_score"]
         ]
-        print(top_blur.to_string(index = False))
 
-    # Noise Detection
-    for split in ["train","val"]:
+        print(
+            top_blur.to_string(index=False)
+        )
+
+
+    # ── Noise Detection ────────────────────────────────────────
+    for split in ["train", "val"]:
+
         df_noise = detect_noise(split)
 
-        print(f" \n Top 10 Noisiest Images [{split.upper()}]")
-        print(df_noise.nlargest(10, "reconstruction_error")[
-            ["file_path" , "class", "reconstruction_error"]
-            ].to_string(index = False))
+        print(
+            f"\n Top 10 Noisiest Images "
+            f"[{split.upper()}]"
+        )
+
+        print(
+            df_noise.nlargest(
+                10,
+                "reconstruction_error"
+            )[
+                [
+                    "file_path",
+                    "class",
+                    "reconstruction_error"
+                ]
+            ].to_string(index=False)
+        )
+
+        # ── Medium 4: Noise Refinement ─────────────────────────
+        df_noise_refined = refine_noise_flags(split)
+
+        print(
+            f"\n Top 10 Refined Noise Cases "
+            f"[{split.upper()}]"
+        )
+
+        print(
+            df_noise_refined[
+                df_noise_refined["is_noisy_refined"]
+            ].sort_values(
+                "reconstruction_error",
+                ascending=False
+            ).head(10)[
+                [
+                    "file_path",
+                    "class",
+                    "reconstruction_error",
+                    "blur_score",
+                    "is_outlier",
+                    "noise_verdict"
+                ]
+            ].to_string(index=False)
+        )
         
     
 
