@@ -11,6 +11,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from sklearn.cluster import DBSCAN
+
+
 
 # -------- Configuration -----
 EMBED_DIR = "embeddings"
@@ -43,42 +46,77 @@ def reduce_dimensions(embeddings):
 
     return reduced
 
-# ----- Kmeans Clustering -----
-def method1_KMeans(reduced, labels):
 
-    """Cluster All Embeddings to K clusters 
-    Map each Cluster into its dominant class
-    Image flagged if declared class != cluster dominant class
+
+def method1_dbscan(reduced, labels):
+    """
+    Replace KMeans with DBSCAN for mislabel detection.
+
+    Why DBSCAN is better here:
+      - No K to tune
+      - Finds clusters of arbitrary shape
+      - Points that fit nowhere → label = -1
+      - Not forced to assign every point to a cluster
+
+    Strategy:
+      - Run DBSCAN separately for each class
+      - Points labelled -1 are density-based outliers
+      - These points are suspicious because their visual
+        embedding does not belong to a sufficiently dense
+        group within their claimed class
     """
 
-    print(f"\n Method 1 : Kmeans Clustering ------------")
+    print("\n── Method 1: DBSCAN clustering ──────────────────")
 
-    kmeans = KMeans(n_clusters = K_MEANS, 
-                    random_state=RANDOM_STATE, n_init=10)
-    
-    cluster_ids = kmeans.fit_predict(reduced)
+    from sklearn.preprocessing import normalize as sk_normalize
 
-    # ----- Map each cluster to its dominant class -----
-    cluster_to_class = {}
+    normed = sk_normalize(reduced, norm="l2")
 
-    for cid in range(K_MEANS):
-        mask = cluster_ids == cid
-        class_counts = Counter(labels[mask])
-        dominant = class_counts.most_common(1)[0][0]
-        cluster_to_class[cid] = dominant
+    flags = np.zeros(len(labels), dtype=bool)
+    pred_cls = np.array(labels.copy())
 
-        class_counts = {str(k): v for k, v in Counter(labels[mask]).items()}
-        print(f"Cluster {cid} -> '{dominant}': {class_counts}")
+    for cls in np.unique(labels):
 
-        
+        mask = labels == cls
 
-    predicted = np.array([cluster_to_class[c] for c in cluster_ids])
-    km_flag = predicted != labels
+        cls_vecs = normed[mask]
+        cls_idx = np.where(mask)[0]
 
-    
-    print(f" \n KMean suspects : {km_flag.sum()} Images")
+        dbscan = DBSCAN(
+            eps=0.5,
+            min_samples=10,
+            metric="cosine",
+            n_jobs=-1
+        )
 
-    return km_flag, predicted
+        cluster_ids = dbscan.fit_predict(cls_vecs)
+
+        # DBSCAN assigns -1 to density-based noise points.
+        # These images are suspicious within their claimed class.
+        noise_mask = cluster_ids == -1
+
+        n_noise = noise_mask.sum()
+        n_total = len(cluster_ids)
+
+        print(
+            f"  [{cls:10s}] {n_total} images → "
+            f"{n_noise} density outliers "
+            f"({100 * n_noise / n_total:.1f}%)"
+        )
+
+        for local_i, is_noise in enumerate(noise_mask):
+
+            if is_noise:
+
+                global_i = cls_idx[local_i]
+
+                flags[global_i] = True
+
+    print(
+        f"\n  DBSCAN suspects: {flags.sum()} images"
+    )
+
+    return flags, pred_cls
 
 # ----- Nearest Neighbour Voting -----
 def method2_nearest_neighbors(reduced, labels):
@@ -198,7 +236,7 @@ def detect_mislabels(split = "train"):
     reduced = reduce_dimensions(embeddings)
 
     # ----- Run all Three methods -----
-    km_flag, km_pred = method1_KMeans(reduced, labels)
+    km_flag, km_pred = method1_dbscan(reduced, labels)
     nn_flag, nn_pred = method2_nearest_neighbors(reduced, labels)
     cd_flag, cd_pred = method3_centroid_distance(reduced, labels)
 
