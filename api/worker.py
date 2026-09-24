@@ -3,7 +3,7 @@ Async job management.
 Owns the ThreadPoolExecutor — one place only.
 """
 import asyncio
-import time
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 
 executor : ThreadPoolExecutor = ThreadPoolExecutor(max_workers=4)
@@ -11,7 +11,7 @@ jobs     : dict               = {}   # In production: replace with Redis
 
 
 def make_job(job_id: str) -> dict:
-    now = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = datetime.now(timezone.utc)
     return {
         "job_id"     : job_id,
         "status"     : "pending",

@@ -1,6 +1,7 @@
 from fastapi          import APIRouter
 from pathlib          import Path
-import time
+from datetime import datetime, timezone
+
 
 from api.schemas      import HealthResponse
 from api.dependencies import get_resnet, get_autoencoder
@@ -20,5 +21,5 @@ async def health():
             "val_master"       : Path("reports/val_master_report.csv").exists(),
             "train_embeddings" : Path("embeddings/train_embeddings.npy").exists(),
         },
-        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        timestamp = datetime.now(timezone.utc)
     )
