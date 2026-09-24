@@ -7,6 +7,10 @@ from pathlib import Path
 import os
 from PIL import Image
 import shutil
+import httpx
+
+# ----- FastAPI Configuration -----
+API_BASE = "http://localhost:8000"
 
 # ---- PAGE CONFIG -------------------------------
 st.set_page_config(
@@ -50,15 +54,38 @@ st.markdown("""
 
 # ------ HELPERS ----------------------------------
 
-@st.cache_data
+@st.cache_data(ttl=60)
 def load_master(split):
-    p = f"reports/{split}_master_report.csv"
-    return pd.read_csv(p) if os.path.exists(p) else None
+    """Fetch master report from FastAPI."""
+    try:
+        response = httpx.get(f"{API_BASE}/reports/{split}/master", timeout=30)
 
-@st.cache_data
+        if response.status_code == 200:
+            from io import StringIO
+            return pd.read_csv(StringIO(response.text))
+
+        return None
+
+    except httpx.RequestError:
+        return None
+
+@st.cache_data(ttl=60)
 def load_duplicates(split):
-    p = f"reports/{split}_duplicates_report.csv"
-    return pd.read_csv(p) if os.path.exists(p) else None
+    """Fetch duplicate report from FastAPI."""
+    try:
+        response = httpx.get(
+            f"{API_BASE}/reports/{split}/duplicates",
+            timeout=30
+        )
+
+        if response.status_code == 200:
+            from io import StringIO
+            return pd.read_csv(StringIO(response.text))
+
+        return None
+
+    except httpx.RequestError:
+        return None
 
 def load_image(path, size=(200, 200)):
     try:
@@ -93,6 +120,55 @@ with st.sidebar:
         "📂 Dataset Split",
         ["train", "val"]
     )
+        # ----- API Controls -----
+    st.markdown("### 🚀 API Pipeline")
+
+    try:
+        health_response = httpx.get(
+            f"{API_BASE}/health",
+            timeout=3
+        )
+
+        if health_response.status_code == 200:
+            st.success("🟢 API Connected")
+        else:
+            st.error("🔴 API Error")
+
+    except httpx.RequestError:
+        st.error("🔴 API Offline")
+
+    if st.button("🚀 Run full pipeline", type="primary"):
+
+        try:
+            response = httpx.post(
+                f"{API_BASE}/pipeline/run",
+                json={
+                    "split": split,
+                    "run_duplicates": True,
+                    "run_blur": True,
+                    "run_noise": True,
+                    "run_outliers": True,
+                    "run_mislabels": True
+                },
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                job = response.json()
+
+                st.success(
+                    f"Pipeline started: `{job['job_id'][:8]}...`"
+                )
+
+                st.session_state["active_job"] = job["job_id"]
+
+            else:
+                st.error(
+                    f"Pipeline failed: {response.text}"
+                )
+
+        except httpx.RequestError as e:
+            st.error(f"API connection failed: {e}")
 
     st.markdown("### 📂 Dataset")
 
@@ -135,7 +211,10 @@ master = load_master(split)
 dup_df = load_duplicates(split)
 
 if master is None:
-    st.error("Run decision_engine.py first to generate master report.")
+    st.error(
+        "No master report available. Make sure the FastAPI server is running "
+        "and run the pipeline from the sidebar."
+    )
     st.stop()
 
 total  = len(master)

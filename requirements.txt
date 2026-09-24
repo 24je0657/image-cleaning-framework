@@ -1,12 +1,16 @@
-pip install torch torchvision torchaudio
-pip install opencv-python opencv-python-headless
-pip install numpy scikit-learn pandas
-pip install streamlit
-pip install faiss-cpu
-pip install imagehash pillow
-pip install matplotlib
-pip install seaborn
-
-
-
-// torchaudio	Audio processing (not needed for images).
+torch
+torchvision
+opencv-python
+numpy
+scikit-learn
+pandas
+streamlit
+faiss-cpu
+imagehash
+pillow
+matplotlib
+seaborn
+httpx
+fastapi
+uvicorn
+python-multipart
