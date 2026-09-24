@@ -1,0 +1,77 @@
+"""
+Models loaded ONCE at startup via lru_cache.
+Injected into routes via FastAPI Depends().
+Never re-loaded per request.
+"""
+import torch
+import torch.nn as nn
+import torchvision.transforms as transforms
+from torchvision.models import resnet50, ResNet50_Weights
+from functools import lru_cache
+from pathlib   import Path
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+class ConvAutoencoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(3, 32, 3, stride=2, padding=1),
+            nn.BatchNorm2d(32), nn.ReLU(),
+            nn.Conv2d(32, 64, 3, stride=2, padding=1),
+            nn.BatchNorm2d(64), nn.ReLU(),
+            nn.Conv2d(64, 128, 3, stride=2, padding=1),
+            nn.BatchNorm2d(128), nn.ReLU(),
+        )
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(128, 64, 3, stride=2,
+                               padding=1, output_padding=1),
+            nn.BatchNorm2d(64), nn.ReLU(),
+            nn.ConvTranspose2d(64, 32, 3, stride=2,
+                               padding=1, output_padding=1),
+            nn.BatchNorm2d(32), nn.ReLU(),
+            nn.ConvTranspose2d(32, 3, 3, stride=2,
+                               padding=1, output_padding=1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        return self.decoder(self.encoder(x))
+
+
+@lru_cache(maxsize=1)
+def get_resnet():
+    print(f"Loading ResNet50 on {DEVICE}...")
+    model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
+    model = torch.nn.Sequential(*list(model.children())[:-1])
+    model.eval().to(DEVICE)
+    print("ResNet50 ready ✅")
+    return model
+
+
+@lru_cache(maxsize=1)
+def get_autoencoder():
+    path = Path("models/autoencoder.pth")
+    if not path.exists():
+        print("⚠ autoencoder.pth not found — noise detection disabled")
+        return None
+    print("Loading autoencoder...")
+    model = ConvAutoencoder()
+    model.load_state_dict(torch.load(str(path), map_location=DEVICE))
+    model.eval().to(DEVICE)
+    print("Autoencoder ready ✅")
+    return model
+
+
+resnet_transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std =[0.229, 0.224, 0.225])
+])
+
+ae_transform = transforms.Compose([
+    transforms.Resize((128, 128)),
+    transforms.ToTensor(),
+])
