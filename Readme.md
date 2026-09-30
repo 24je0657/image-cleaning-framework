@@ -415,6 +415,37 @@ The framework projects 2048-dimensional ResNet50 embeddings into a lower-dimensi
   <img src="assets/val_mislabel_heatmap.png" width="700">
 </p>
 
+### Mislabel Detection — Empirical Validation
+
+**Manual precision validation on HIGH-confidence flags:**
+
+| Split | Reviewed | Confirmed | False Positives | Precision |
+|-------|--------:|----------:|----------------:|----------:|
+| Train | 20 | 20 | 0 | **100%** |
+| Val   | 17 | 17 | 0 | **100%** |
+| **Total** | **37** | **37** | **0** | **100%** |
+
+Every HIGH-confidence mislabel (3/3 methods agree) was
+manually verified as a genuine labeling error.
+
+**Confirmed confusion pairs (train):**
+
+| Declared → Predicted | Count | Confirmed |
+|---------------------|------:|----------:|
+| lion → elephant | 6 | 6 |
+| lion → horse | 5 | 5 |
+| elephant → horse | 3 | 3 |
+| horse → dog | 2 | 2 |
+| horse → lion | 1 | 1 |
+| horse → elephant | 1 | 1 |
+| elephant → lion | 1 | 1 |
+| lion → dog | 1 | 1 |
+
+**Key finding:** Lion images are the most commonly mislabeled
+class — frequently confused with elephant (6 cases) and horse
+(5 cases), consistent with shared savanna backgrounds and
+similar body proportions in certain photography angles.
+
 ## Cleaning Results
 
 ### Training Set (13,474 images)
