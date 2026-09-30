@@ -169,7 +169,7 @@ def query_bktree(
     return flagged
     
     
-def Find_Exact_Duplicates(paths_array, split="train"):
+def find_exact_duplicates(paths_array, split="train"):
     """
     Production duplicate detection using a BK-tree.
 
@@ -312,7 +312,7 @@ def Find_Exact_Duplicates(paths_array, split="train"):
 
 # ---- Near Duplicate Detection(COSINE_SIMILARITY) -----
 
-def Find_Near_Duplicates(embeddings, paths_array, split = "train"):
+def find_near_duplicates(embeddings, paths_array, split = "train"):
     """
     Three-tier near-duplicate detection using confidence bands.
 
@@ -385,11 +385,11 @@ if __name__ == "__main__":
         embeddings, labels, paths_array = load_embeddings(split)
 
         # ----- Exact Duplicate -----
-        df_exact, dup_groups = Find_Exact_Duplicates(paths_array, split)
+        df_exact, dup_groups = find_exact_duplicates(paths_array, split)
 
 
         # ----- Near Duplicate -----
-        df_near, near_flagged = Find_Near_Duplicates(embeddings, paths_array, split)
+        df_near, near_flagged = find_near_duplicates(embeddings, paths_array, split)
 
         # ----- Merge both reports  -----
 

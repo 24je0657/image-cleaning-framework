@@ -10,7 +10,7 @@ WEIGHTS = {
     "exact_duplicate" : 10,
     "near_duplicate"  : 8,
     "is_blurry"       : 6,
-    "is_noisy"        : 5,
+    "is_noisy_refined"        : 5,
     "is_outlier"      : 4,
     "is_mislabeled"   : 7,
 }
@@ -74,7 +74,7 @@ class DecisionEngineService:
                 master = master.merge(df[cols], on="file_path", how="left")
 
         # Fill NaN flags
-        flag_cols = ["exact_duplicate","near_duplicate",
+        flag_cols = ["Exact_duplicates","near_duplicate","is_noisy_refined",
                      "is_noisy","is_outlier","is_mislabeled"]
         for col in flag_cols:
             if col in master.columns:
