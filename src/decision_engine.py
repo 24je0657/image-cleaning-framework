@@ -64,7 +64,7 @@ def build_master_report(split = "train"):
     )
     noise_df = load_report(
         f"{REPORTS_DIR}/{split}_noise_report.csv",
-        ["file_path", "is_noisy", "reconstruction_error","noise_verdict"]
+        ["file_path", "is_noisy","is_noisy_refined","reconstruction_error","noise_verdict"]
     )
     out_df   = load_report(
         f"{REPORTS_DIR}/{split}_outlier_report.csv",
@@ -102,15 +102,17 @@ def build_master_report(split = "train"):
     # ----- Merge Noise -----
     if noise_df is not None:
         master = master.merge(
-            noise_df[["file_path", "is_noisy", "reconstruction_error","noise_verdict"]],
+            noise_df[["file_path", "is_noisy", "is_noisy_refined","reconstruction_error","noise_verdict"]],
             on="file_path", how="left"
         )
     else:
         master["is_noisy"]              = False
+        master["is_noisy_refined"]       = False
         master["reconstruction_error"]  = np.nan
         master["noise_verdict"] = "not_flagged"
 
     master["is_noisy"] = master["is_noisy"].fillna(False)
+    master["is_noisy_refined"] = master["is_noisy_refined"].fillna(False)
     master["noise_verdict"] = (
         master["noise_verdict"].fillna("not_flagged")
     )
@@ -211,7 +213,7 @@ def build_master_report(split = "train"):
                 score += 5
 
         # ----- Noise -----
-        if row.get("is_noisy", False):
+        if row.get("is_noisy_refined", False):
 
             noise_verdict = row.get(
                 "noise_verdict",
@@ -329,7 +331,7 @@ def build_master_report(split = "train"):
         "Exact_duplicates",
         "near_duplicate",
         "is_blurry",
-        "is_noisy",
+        "is_noisy_refined",
         "is_outlier",
         "is_mislabeled"
     ]
@@ -507,7 +509,7 @@ def build_master_report(split = "train"):
         ),
 
         "noisy": (
-            master["is_noisy"]
+            master["is_noisy_refined"]
             .astype(bool)
             .sum()
         ),

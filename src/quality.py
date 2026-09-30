@@ -387,11 +387,10 @@ def compute_reconstruction_error(model, image_path):
 # ===========================
 # Dataset Level Noise Detection using AutoEncoder
 
-def detect_noise(split = "train"):
+def detect_noise(split="train", use_adaptive=True):
+    """Detect noisy images using AutoEncoder reconstruction error."""
 
-    """ Detect Noisy Images using AutoEncoder Reconstruction Error."""
-
-    split_path = Path(ROOT_DIR)/split
+    split_path = Path(ROOT_DIR) / split
     model = load_autoencoder()
     records = []
 
@@ -399,64 +398,118 @@ def detect_noise(split = "train"):
         [d.name for d in split_path.iterdir() if d.is_dir()]
     )
 
-    print(f"\n{'='*30}")
+    print(f"\n{'=' * 30}")
     print(f"Noise detection - {split.upper()} Set")
-    print(f"{'='*30}")
+    print(f"{'=' * 30}")
 
     for class_name in classes:
         class_dir = split_path / class_name
+
         img_files = sorted([
             f for f in class_dir.iterdir()
-            if f.is_file and f.suffix.lower() in VALID_EXTENSIONS
+            if f.is_file() and f.suffix.lower() in VALID_EXTENSIONS
         ])
 
-        print(f"Processing {class_name}- {len(img_files)} images")
+        print(f"Processing {class_name} - {len(img_files)} images")
 
         for idx, img_path in enumerate(img_files):
             error = compute_reconstruction_error(model, img_path)
+
             if error is None:
                 continue
 
             records.append({
-                "file_path" : str(img_path),
-                "class" : class_name,
-                "reconstruction_error" : error
+                "file_path": str(img_path),
+                "class": class_name,
+                "reconstruction_error": error
             })
 
-            if(idx+1) % 500 == 0:
-                print(f" {idx+1} / {len(img_files)} done...")
+            if (idx + 1) % 500 == 0:
+                print(f" {idx + 1} / {len(img_files)} done...")
 
     df = pd.DataFrame(records)
 
-    #Dynamically set threshold as mean + 2*std
+    # Set noise threshold
     mean_error = df["reconstruction_error"].mean()
     std_error = df["reconstruction_error"].std()
-    threshold = mean_error + 2*std_error
 
-    df["is_noisy"] = df["reconstruction_error"] > threshold
+    if use_adaptive:
+        # Calculate threshold separately for each class
+        class_thresholds = (
+            df.groupby("class")["reconstruction_error"]
+            .agg(["mean", "std"])
+        )
 
-    # per-class statistics
-    print(f"\n ----- Per class Noise Statistics -----")
+        class_thresholds["threshold"] = (
+            class_thresholds["mean"] +
+            2 * class_thresholds["std"]
+        )
+
+        df["noise_threshold"] = df["class"].map(
+            class_thresholds["threshold"]
+        )
+
+        df["is_noisy"] = (
+            df["reconstruction_error"] > df["noise_threshold"]
+        )
+
+    else:
+        # Global threshold
+        threshold = mean_error + 2 * std_error
+
+        df["noise_threshold"] = threshold
+
+        df["is_noisy"] = (
+            df["reconstruction_error"] > threshold
+        )
+
+    threshold = (
+        df["noise_threshold"].iloc[0]
+        if not use_adaptive
+        else None
+    )
+
+    # Per-class statistics
+    print("\n ----- Per class Noise Statistics -----")
+
     stats = df.groupby("class").agg(
-        total = ("reconstruction_error","count"),
-        noisy_count = ("is_noisy", "sum"),
-        mean_error = ("reconstruction_error", "mean"),
+        total=("reconstruction_error", "count"),
+        noisy_count=("is_noisy", "sum"),
+        mean_error=("reconstruction_error", "mean"),
     ).reset_index()
 
-    stats["noisy_%"] = (stats["noisy_count"] / stats["total"] *100).round(2)
-    print(stats.to_string(index = False))
+    stats["noisy_%"] = (
+        stats["noisy_count"] / stats["total"] * 100
+    ).round(2)
+
+    print(stats.to_string(index=False))
 
     # Overall Summary
-    print(f"\n ----- Overall Summary -----")
-    print(f" Total images :{len(df)}")
+    print("\n ----- Overall Summary -----")
+    print(f" Total images : {len(df)}")
     print(f" Mean Reconstruction Error : {mean_error:.4f}")
     print(f" Std Reconstruction Error : {std_error:.4f}")
-    print(f" Noise Threshold : {threshold:.4f}")
-    print(f" Noisy images :{df['is_noisy'].sum()} ({100 * df['is_noisy'].sum() / len(df):.2f}%)")
+
+    if use_adaptive:
+        print(" Noise Threshold : Adaptive per-class")
+        print(
+            class_thresholds[["threshold"]].to_string()
+        )
+    else:
+        print(f" Noise Threshold : {threshold:.4f}")
+
+    noisy_count = int(df["is_noisy"].sum())
+    noisy_pct = 100 * noisy_count / len(df)
+
+    print(
+        f" Noisy images : {noisy_count} "
+        f"({noisy_pct:.2f}%)"
+    )
 
     # Save Report
     out_path = f"{REPORTS_DIR}/{split}_noise_report.csv"
-    df.to_csv(out_path, index = False)
+    df.to_csv(out_path, index=False)
+
     print(f" Noise report saved to {out_path}")
 
     return df
