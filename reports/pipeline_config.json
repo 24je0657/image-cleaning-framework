@@ -1,0 +1,23 @@
+{
+  "data_dir": "data/raw/Animal",
+  "output_dir": "data_clean/Animal",
+  "splits": [
+    "train",
+    "val"
+  ],
+  "classes": [
+    "cat",
+    "dog",
+    "elephant",
+    "horse",
+    "lion"
+  ],
+  "run_duplicates": true,
+  "run_blur": false,
+  "run_noise": false,
+  "run_outliers": false,
+  "run_mislabels": false,
+  "blur_percentile": 5,
+  "cosine_threshold": 0.97,
+  "contamination": 0.05
+}
