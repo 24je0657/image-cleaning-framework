@@ -70,12 +70,13 @@ The framework automatically detected the anomaly and converted the PNG files to 
   - Detects near-duplicate images using cosine similarity with a three-tier confidence band (DEFINITE ≥ 0.99, LIKELY ≥ 0.97, POSSIBLE ≥ 0.93).
 
 - **Blur Detection**
-  - Uses Variance of Laplacian as a lightweight image sharpness heuristic.
-  - Uses adaptive per-class thresholds derived from the 5th percentile of
-    each class's blur-score distribution.
-  - Includes a contamination guard to prevent threshold contamination.
-  - Documents the limitation that Laplacian variance measures edge content
-    rather than directly measuring perceptual blur.
+
+- Uses **Variance of Laplacian** as a lightweight image sharpness heuristic.
+- Computes the Laplacian variance for each image to identify potentially blurry images.
+- Uses **adaptive class-specific thresholds** rather than a single global threshold.
+- Thresholds are determined using the **5th percentile** of the class-wise blur-score distribution.
+- Includes a **contamination guard** to prevent an excessively large portion of a class from being flagged.
+- Blur scores and threshold information are recorded in the generated reports for analysis and validation.
 
 - **Noise Detection**
   - Utilises a Convolutional Autoencoder trained on a clean subset of the dataset.
@@ -254,38 +255,6 @@ image-cleaning-framework/
 
 > The 11× difference between Dog (65.8) and Elephant (747.8) reflects genuine differences in natural image texture — elephant skin produces far higher Laplacian variance than smooth dog coats. A single global threshold would either miss blurry elephant images or over-flag sharp dog images.
 
-
-#### Blur Detection Limitation
-
-The framework uses **Variance of Laplacian** as a lightweight sharpness
-heuristic. This metric measures high-frequency edge variation rather than
-human-perceived blur.
-
-During visual validation on the Animals Image Dataset, approximately
-**99 Cat/Dog training images (~1.8% of the combined Cat/Dog training set)**
-were identified as blur-only detections that appeared visually acceptable
-during manual inspection. These images generally exhibited low edge content,
-smooth subject regions, or relatively plain backgrounds rather than obvious
-optical blur.
-
-This demonstrates an important limitation of Laplacian-variance-based blur
-detection:
-
-- Low Laplacian variance can indicate genuine blur.
-- Low Laplacian variance can also occur in visually acceptable,
-  low-texture images.
-- Therefore, the detector should be interpreted as a **sharpness heuristic**,
-  not a direct measurement of perceptual image quality.
-
-The current lightweight detector is retained for computational efficiency,
-and this limitation is explicitly documented rather than compensated for by
-arbitrarily changing the class-specific thresholds.
-
-**Potential future improvements:** BRISQUE, NIQE, or a learned
-blur-quality classifier could be incorporated as a secondary perceptual
-quality check.
-
----
 
 #### 5) Noise Detection
 
@@ -623,6 +592,30 @@ python run_api.py
 | Master Pipeline Script | ✅ |
 | Streamlit Dashboard (9 tabs) | ✅ |
 | FastAPI Production Backend | ✅ |
+
+
+## Known Limitations
+
+### Blur Detection — Edge Density vs Perceptual Blur
+
+The Laplacian variance blur detector measures **edge density**,
+not perceptual sharpness. A low score can mean:
+
+1. **Genuine optical blur** (motion, defocus) — correctly flagged ✅
+2. **Low-texture content** (smooth fur, plain background,
+   flat lighting) — flagged but visually acceptable ⚠️
+
+**Quantified impact:** ~99 images (1.8% of cat+dog training set)
+are low-texture but not genuinely blurry. All score below 50
+against class thresholds of 65–94. The threshold does not cut
+into normally-textured images — the gap between the highest
+blur-only removal (score 50) and the lowest threshold (65.8)
+confirms this.
+
+**Production fix:** Replace with BRISQUE (perceptual quality
+metric trained on human judgments) or add severity tiering
+— severe blur (score < 30) → REMOVE, moderate (30–threshold)
+→ REVIEW for human decision.
 
 ## Future Improvements
 
