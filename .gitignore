@@ -9,3 +9,5 @@ reports/*.csv
 models/*.pth
 .streamlit/
 verification/
+notebooks/diagnosis_outputs/
+notebooks/visual_inspection_outputs/

@@ -70,10 +70,12 @@ The framework automatically detected the anomaly and converted the PNG files to 
   - Detects near-duplicate images using cosine similarity with a three-tier confidence band (DEFINITE ≥ 0.99, LIKELY ≥ 0.97, POSSIBLE ≥ 0.93).
 
 - **Blur Detection**
-  - Computes the Variance of Laplacian to measure image sharpness.
-  - Uses **adaptive per-class thresholds** derived from the **5th percentile** of each class's blur-score distribution.
-  - Includes a contamination guard: if a class exceeds 30% estimated blur rate, the system falls back to the global threshold to avoid threshold contamination.
-  - Automatically adjusts blur detection for different image characteristics across classes.
+  - Uses Variance of Laplacian as a lightweight image sharpness heuristic.
+  - Uses adaptive per-class thresholds derived from the 5th percentile of
+    each class's blur-score distribution.
+  - Includes a contamination guard to prevent threshold contamination.
+  - Documents the limitation that Laplacian variance measures edge content
+    rather than directly measuring perceptual blur.
 
 - **Noise Detection**
   - Utilises a Convolutional Autoencoder trained on a clean subset of the dataset.
@@ -251,6 +253,37 @@ image-cleaning-framework/
 | Lion | 535.4 |
 
 > The 11× difference between Dog (65.8) and Elephant (747.8) reflects genuine differences in natural image texture — elephant skin produces far higher Laplacian variance than smooth dog coats. A single global threshold would either miss blurry elephant images or over-flag sharp dog images.
+
+
+#### Blur Detection Limitation
+
+The framework uses **Variance of Laplacian** as a lightweight sharpness
+heuristic. This metric measures high-frequency edge variation rather than
+human-perceived blur.
+
+During visual validation on the Animals Image Dataset, approximately
+**99 Cat/Dog training images (~1.8% of the combined Cat/Dog training set)**
+were identified as blur-only detections that appeared visually acceptable
+during manual inspection. These images generally exhibited low edge content,
+smooth subject regions, or relatively plain backgrounds rather than obvious
+optical blur.
+
+This demonstrates an important limitation of Laplacian-variance-based blur
+detection:
+
+- Low Laplacian variance can indicate genuine blur.
+- Low Laplacian variance can also occur in visually acceptable,
+  low-texture images.
+- Therefore, the detector should be interpreted as a **sharpness heuristic**,
+  not a direct measurement of perceptual image quality.
+
+The current lightweight detector is retained for computational efficiency,
+and this limitation is explicitly documented rather than compensated for by
+arbitrarily changing the class-specific thresholds.
+
+**Potential future improvements:** BRISQUE, NIQE, or a learned
+blur-quality classifier could be incorporated as a secondary perceptual
+quality check.
 
 ---
 
