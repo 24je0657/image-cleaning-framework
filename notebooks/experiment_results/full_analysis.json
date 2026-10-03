@@ -1,0 +1,56 @@
+{
+  "seed_test": {
+    "42": {
+      "A": 99.0,
+      "B": 98.06,
+      "diff": -0.94
+    },
+    "123": {
+      "A": 99.06,
+      "B": 98.06,
+      "diff": -1.0
+    },
+    "999": {
+      "A": 99.13,
+      "B": 98.06,
+      "diff": -1.07
+    },
+    "2024": {
+      "A": 98.86,
+      "B": 98.06,
+      "diff": -0.8
+    },
+    "7": {
+      "A": 99.0,
+      "B": 98.06,
+      "diff": -0.94
+    }
+  },
+  "module_attribution": {
+    "full_original": {
+      "n": 13474,
+      "acc": 99.0
+    },
+    "remove_duplicates": {
+      "n": 13066,
+      "acc": 98.93
+    },
+    "remove_outliers": {
+      "n": 12523,
+      "acc": 98.6
+    },
+    "remove_mislabels": {
+      "n": 13454,
+      "acc": 98.93
+    },
+    "remove_blur": {
+      "n": 12798,
+      "acc": 99.06
+    },
+    "full_pipeline": {
+      "n": 11099,
+      "acc": 98.06
+    }
+  },
+  "conclusion": "Blur removal +0.06%, duplicates/mislabels neutral, outliers -0.40% main driver"
+}

@@ -1,0 +1,41 @@
+{
+  "A_random": {
+    "name": "A \u2014 Random subset (null baseline)",
+    "n_train": 11099,
+    "val_acc": 99.0,
+    "per_class": {
+      "cat": 99.67,
+      "dog": 100.0,
+      "elephant": 98.33,
+      "horse": 98.0,
+      "lion": 98.99
+    },
+    "duration_s": 8.7
+  },
+  "B_clean": {
+    "name": "B \u2014 Clean subset (pipeline output)",
+    "n_train": 11099,
+    "val_acc": 98.06,
+    "per_class": {
+      "cat": 99.67,
+      "dog": 100.0,
+      "elephant": 95.65,
+      "horse": 97.67,
+      "lion": 97.32
+    },
+    "duration_s": 5.9
+  },
+  "C_full": {
+    "name": "C \u2014 Full original dataset",
+    "n_train": 13474,
+    "val_acc": 99.0,
+    "per_class": {
+      "cat": 99.67,
+      "dog": 100.0,
+      "elephant": 97.99,
+      "horse": 98.67,
+      "lion": 98.66
+    },
+    "duration_s": 7.3
+  }
+}
