@@ -48,30 +48,30 @@ def load_report(path, required_cols):
 
 # ----- Main Merge Function -----
 
-def build_master_report(split = "train"):
+def build_master_report(split = "train",reports_dir=REPORTS_DIR):
 
     print(f"\n{'='*30}")
     print(f"DECISION ENGINE -- {split.upper()} SET")
     print(f"{'='*30}")
 
     dup_df   = load_report(
-        f"{REPORTS_DIR}/{split}_duplicates_report.csv",
+        f"{reports_dir}/{split}_duplicates_report.csv",
         ["file_path", "Exact_duplicates", "near_duplicate","dup_confidence"]
     )
     blur_df  = load_report(
-        f"{REPORTS_DIR}/{split}_blur_report.csv",
+        f"{reports_dir}/{split}_blur_report.csv",
         ["file_path","class", "blur_score", "threshold_used", "is_blurry"]
     )
     noise_df = load_report(
-        f"{REPORTS_DIR}/{split}_noise_report.csv",
+        f"{reports_dir}/{split}_noise_report.csv",
         ["file_path", "is_noisy","is_noisy_refined","reconstruction_error","noise_verdict"]
     )
     out_df   = load_report(
-        f"{REPORTS_DIR}/{split}_outlier_report.csv",
+        f"{reports_dir}/{split}_outlier_report.csv",
         ["file_path", "is_outlier"]
     )
     mis_df   = load_report(
-        f"{REPORTS_DIR}/{split}_mislabel_report.csv",
+        f"{reports_dir}/{split}_mislabel_report.csv",
         ["file_path", "is_mislabeled", "confidence", "declared_class"]
     )
     # Use blur report as base .. since contains every image

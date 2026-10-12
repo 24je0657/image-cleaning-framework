@@ -169,7 +169,7 @@ def query_bktree(
     return flagged
     
     
-def find_exact_duplicates(paths_array, split="train"):
+def find_exact_duplicates(paths_array, split="train",reports_dir=REPORTS_DIR):
     """
     Production duplicate detection using a BK-tree.
 
@@ -312,7 +312,7 @@ def find_exact_duplicates(paths_array, split="train"):
 
 # ---- Near Duplicate Detection(COSINE_SIMILARITY) -----
 
-def find_near_duplicates(embeddings, paths_array, split = "train"):
+def find_near_duplicates(embeddings, paths_array, split = "train",reports_dir=REPORTS_DIR):
     """
     Three-tier near-duplicate detection using confidence bands.
 

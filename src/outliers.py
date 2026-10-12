@@ -7,6 +7,7 @@ from sklearn.ensemble import IsolationForest
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 
 # ----- Configuration -----
@@ -18,10 +19,10 @@ RANDOM_STATE = 42  # For reproducibility
 
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
-def load_embeddings(split = "train"):
-    embeddings = np.load(f"{EMBED_DIR}/{split}_embeddings.npy")
-    labels = np.load(f"{EMBED_DIR}/{split}_labels.npy", allow_pickle=True)
-    paths = np.load(f"{EMBED_DIR}/{split}_file_paths.npy", allow_pickle=True)
+def load_embeddings(split = "train",embed_dir=EMBED_DIR):
+    embeddings = np.load(f"{embed_dir}/{split}_embeddings.npy")
+    labels = np.load(f"{embed_dir}/{split}_labels.npy", allow_pickle=True)
+    paths = np.load(f"{embed_dir}/{split}_file_paths.npy", allow_pickle=True)
 
     print(f"Loaded {split} embeddings: {embeddings.shape}")
     return embeddings, labels, paths
@@ -51,7 +52,7 @@ def Reduce_Dimensions(embeddings, n_components = PCA_COMPONENTS):
 def run_isolation_forest(reduced_embeddings, contamination = CONTAMINATION):
     """Fit Isolation Forest on PCA-reduced embeddings
       and return outlier scores and predictions."""
-    
+
     print(f" fitting Isolation Forest with contamination={contamination}...")
     clf = IsolationForest(n_estimators = 200,
                           contamination = contamination,
@@ -111,24 +112,24 @@ def run_per_class_isolation_forest(embeddings, labels, paths, contamination = CO
     return pd.DataFrame(all_records)
 
 # ----- Visualization -----
-def plot_outliers(reduced, predictions, labels, split = "train"):
-    """Project to 2D with PCA for Visualization 
+def plot_outliers(reduced, predictions, labels, split = "train",reports_dir=REPORTS_DIR):
+    """Project to 2D with PCA for Visualization
     color by class and mark outliers with red 'x'"""
 
     print("\n Generating Outlier Scatter Plot...")
 
     pca_2d = PCA(n_components=2, random_state=RANDOM_STATE)
     coords_2d = pca_2d.fit_transform(reduced)
-    colors = {"cat":"blue", "dog":"orange", "elephant":"green", 
+    colors = {"cat":"blue", "dog":"orange", "elephant":"green",
               "horse":"purple", "lion":"brown"}
-    
+
     fig, ax = plt.subplots(figsize=(12, 8))
 
     for class_name in np.unique(labels):
         mask = labels == class_name
         ax.scatter(
-            coords_2d[mask, 0], 
-            coords_2d[mask, 1], 
+            coords_2d[mask, 0],
+            coords_2d[mask, 1],
             c=colors.get(class_name, "gray"),
             label=class_name,
             alpha=0.6,
@@ -138,10 +139,10 @@ def plot_outliers(reduced, predictions, labels, split = "train"):
     # Mark outliers
     outlier_mask = predictions == -1
     ax.scatter(
-        coords_2d[outlier_mask, 0], 
-        coords_2d[outlier_mask, 1], 
-        c="red", 
-        marker="x", 
+        coords_2d[outlier_mask, 0],
+        coords_2d[outlier_mask, 1],
+        c="red",
+        marker="x",
         label="Outlier",
         s = 40,
         zorder = 5
@@ -153,21 +154,24 @@ def plot_outliers(reduced, predictions, labels, split = "train"):
     ax.legend(markerscale=2)
     plt.tight_layout()
 
-    out_path = f"{REPORTS_DIR}/{split}_outlier_scatter.png"
+    Path(reports_dir).mkdir(parents=True, exist_ok=True)
+
+    out_path = Path(reports_dir) / f"{split}_outlier_scatter.png"
+
     plt.savefig(out_path, dpi=150)
     plt.close()
     print(f" Scatter plot saved to {out_path}")
 
 
 # ---- Main Function -----
-def detect_outliers(split = "train"):
+def detect_outliers(split = "train",embed_dir=EMBED_DIR,reports_dir=REPORTS_DIR):
 
     print(f"\n{'='*30}")
     print(f"Outlier Detection for {split} set")
     print(f"{'='*30}")
 
     # ----- Load Embeddings -----
-    embeddings, labels, paths = load_embeddings(split)
+    embeddings, labels, paths = load_embeddings(split, embed_dir)
 
     # ----- Global Isolation Forest -----
     reduced, pca, scaler = Reduce_Dimensions(embeddings)
@@ -213,12 +217,13 @@ def detect_outliers(split = "train"):
     print(f" \n Top 10 Most Anomalous Images ------------- ")
     print(df_final.nsmallest(10, "global_score")[
         ["file_path", "class", "global_score", "per_class_score"]].to_string(index=False))
-    
+
     # ----- Visualization -----
-    plot_outliers(reduced, predictions, labels, split)
+    plot_outliers(reduced, predictions, labels, split,reports_dir=reports_dir)
 
     # ----- Save Final Report -----
-    report_path = f"{REPORTS_DIR}/{split}_outlier_report.csv"
+    Path(reports_dir).mkdir(parents=True, exist_ok=True)
+    report_path = Path(reports_dir) / f"{split}_outlier_report.csv"
     df_final.to_csv(report_path, index=False)
     print(f" Final report saved to {report_path}")
 
@@ -232,7 +237,7 @@ if __name__ == "__main__":
 
 
 
-        
+
 
 
 

@@ -11,6 +11,8 @@ import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
 import PIL.Image as image
+
+from src.mislabel import EMBED_DIR
 # ==============================
 
 
@@ -67,7 +69,7 @@ def compute_blur_score(image_path):
 
 # ----- Dataset-Level Blur Detection -----
 # ----- Dataset-Level Blur Detection -----
-def detect_blur(split="train", use_adaptive=True, percentile=5):
+def detect_blur(split="train", use_adaptive=True, percentile=5,root_dir=ROOT_DIR,reports_dir=REPORTS_DIR):
     """
     Two-pass blur detection with contamination guard.
 
@@ -87,7 +89,7 @@ def detect_blur(split="train", use_adaptive=True, percentile=5):
     This prevents an overly blurry class from causing its
     adaptive threshold to become too lenient.
     """
-    split_path = Path(ROOT_DIR) / split
+    split_path = Path(root_dir) / split
     records    = []
 
     classes = sorted([d.name for d in split_path.iterdir() if d.is_dir()])
@@ -276,7 +278,7 @@ def detect_blur(split="train", use_adaptive=True, percentile=5):
 
 
     # ── Save report
-    out_path = f"{REPORTS_DIR}/{split}_blur_report.csv"
+    out_path = f"{reports_dir}/{split}_blur_report.csv"
     df.to_csv(out_path, index=False)
     print(f"\n Report saved → {out_path}")
 
@@ -387,10 +389,10 @@ def compute_reconstruction_error(model, image_path):
 # ===========================
 # Dataset Level Noise Detection using AutoEncoder
 
-def detect_noise(split="train", use_adaptive=True):
+def detect_noise(split="train", use_adaptive=True,root_dir=ROOT_DIR, reports_dir=REPORTS_DIR,embed_dir=EMBED_DIR):
     """Detect noisy images using AutoEncoder reconstruction error."""
 
-    split_path = Path(ROOT_DIR) / split
+    split_path = Path(root_dir) / split
     model = load_autoencoder()
     records = []
 
@@ -507,7 +509,7 @@ def detect_noise(split="train", use_adaptive=True):
     )
 
     # Save Report
-    out_path = f"{REPORTS_DIR}/{split}_noise_report.csv"
+    out_path = f"{reports_dir}/{split}_noise_report.csv"
     df.to_csv(out_path, index=False)
 
     print(f" Noise report saved to {out_path}")
@@ -519,7 +521,7 @@ def detect_noise(split="train", use_adaptive=True):
 # Noise Refinement
 # ===========================
 
-def refine_noise_flags(split="train"):
+def refine_noise_flags(split="train",reports_dir=REPORTS_DIR):
     """
     Refine AutoEncoder noise flags using independent blur and
     outlier evidence.
@@ -542,9 +544,9 @@ def refine_noise_flags(split="train"):
     They are treated as ambiguous cases requiring review.
     """
 
-    noise_path   = f"{REPORTS_DIR}/{split}_noise_report.csv"
-    blur_path    = f"{REPORTS_DIR}/{split}_blur_report.csv"
-    outlier_path = f"{REPORTS_DIR}/{split}_outliers_report.csv"
+    noise_path   = f"{reports_dir}/{split}_noise_report.csv"
+    blur_path    = f"{reports_dir}/{split}_blur_report.csv"
+    outlier_path = f"{reports_dir}/{split}_outliers_report.csv"
 
     if not os.path.exists(noise_path):
         print("Noise report not found — run detect_noise() first")
@@ -766,7 +768,7 @@ def refine_noise_flags(split="train"):
 
     # ── Save refined report ───────────────────────────────────
     out_path = (
-        f"{REPORTS_DIR}/{split}_noise_report.csv"
+        f"{reports_dir}/{split}_noise_report.csv"
     )
 
     noise_df.to_csv(

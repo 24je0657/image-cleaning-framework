@@ -14,8 +14,8 @@ class PipelineConfig:
     # ── Paths ─────────────────────────────────────────────────────
     data_dir        : Path          # root of input dataset
     output_dir      : Path          # where clean images are written
-    embeddings_dir  : Path = Path("embeddings")
-    reports_dir     : Path = Path("reports")
+    embeddings_dir  : Optional[Path]=None
+    reports_dir     : Optional[Path]=None
     models_dir      : Path = Path("models")
 
     # ── Dataset ───────────────────────────────────────────────────
@@ -46,6 +46,17 @@ class PipelineConfig:
     def __post_init__(self):
         self.data_dir   = Path(self.data_dir)
         self.output_dir = Path(self.output_dir)
+
+        dataset_name = self.data_dir.name
+        if self.embeddings_dir is None:
+            self.embeddings_dir = Path("embeddings") / dataset_name
+        else:
+            self.embeddings_dir = Path(self.embeddings_dir)
+        if self.reports_dir is None:
+            self.reports_dir = Path("reports") / dataset_name
+        else:
+            self.reports_dir = Path(self.reports_dir)
+        self.models_dir = Path(self.models_dir)
         self._auto_discover()
 
     def _auto_discover(self):

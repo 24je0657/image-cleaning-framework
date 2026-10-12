@@ -84,7 +84,7 @@ def verify_conversion(original: Path, converted: Path,
 
 def convert_non_jpg(split     : str  = "val",
                     class_name: str  = "horse",
-                    dry_run   : bool = True) -> pd.DataFrame:
+                    dry_run   : bool = True, root_dir=ROOT_DIR,reports_dir=REPORTS_DIR) -> pd.DataFrame:
     """
     Convert all non-JPG images in a specific class to JPG.
 
@@ -99,7 +99,7 @@ def convert_non_jpg(split     : str  = "val",
       5. If failed   → remove corrupted .jpg, keep original
       6. Report results
     """
-    class_dir = Path(ROOT_DIR) / split / class_name
+    class_dir = Path(root_dir) / split / class_name
 
     if not class_dir.exists():
         raise FileNotFoundError(f"Class dir not found: {class_dir}")
@@ -196,7 +196,7 @@ def convert_non_jpg(split     : str  = "val",
 
     # ── Save conversion log ───────────────────────────────────────
     df       = pd.DataFrame(records)
-    log_path = f"{REPORTS_DIR}/{split}_{class_name}_conversion_log.csv"
+    log_path = f"{reports_dir}/{split}_{class_name}_conversion_log.csv"
     df.to_csv(log_path, index=False)
     print(f"\n✅ Conversion log → {log_path}")
 
@@ -205,7 +205,7 @@ def convert_non_jpg(split     : str  = "val",
 
 # ─── FULL DATASET SCAN ────────────────────────────────────────────────────────
 
-def scan_format_distribution(splits=("train", "val")) -> pd.DataFrame:
+def scan_format_distribution(splits=("train", "val"),root_dir=ROOT_DIR) -> pd.DataFrame:
     """
     Scan entire dataset and report format distribution per class.
     Flags any class with >5% non-JPG as anomalous.
@@ -217,7 +217,7 @@ def scan_format_distribution(splits=("train", "val")) -> pd.DataFrame:
 
     records = []
     for split in splits:
-        split_path = Path(ROOT_DIR) / split
+        split_path = Path(root_dir) / split
         for cls_dir in sorted(split_path.iterdir()):
             if not cls_dir.is_dir():
                 continue

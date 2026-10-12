@@ -1,12 +1,26 @@
+# Python environment and cache
 venv/
 __pycache__/
-*.pyc
+*.py[cod]
 .ipynb_checkpoints/
-data/raw/
+
+# Local datasets and downloaded archives
+data/
 data_clean/
-embeddings/*.npy
+*.zip
+
+# Generated embeddings
+embeddings/
+
+# Generated reports
 reports/*.csv
+reports/*.png
+reports/*.npy
+
+# Model checkpoints
 models/*.pth
+
+# Local application and verification files
 .streamlit/
 verification/
 notebooks/diagnosis_outputs/

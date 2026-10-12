@@ -1,3 +1,4 @@
+from matplotlib.path import Path
 import numpy as np
 import pandas as pd
 import os
@@ -190,7 +191,7 @@ def method3_centroid_distance(reduced,labels):
 
 
 # ----- Confusion Matrix Visualisation -----
-def plot_confusion_matrix(labels, nn_pred, split = "train"):
+def plot_confusion_matrix(labels, nn_pred, split = "train",reports_dir=REPORTS_DIR):
     """
     Plot declared class vs NN-predicted class as a heatmap.
     Off-diagonal cells = potential mislabels.
@@ -220,19 +221,21 @@ def plot_confusion_matrix(labels, nn_pred, split = "train"):
                  f"(Off-diagonal = mislabel candidates)")
     plt.tight_layout()
 
-    out_path = f"{REPORTS_DIR}/{split}_mislabel_heatmap.png"
+    reports_path = Path(reports_dir)
+    reports_path.mkdir(parents=True, exist_ok=True)
+    out_path = reports_path / f"{split}_mislabel_heatmap.png"
     plt.savefig(out_path, dpi=150)
     plt.close()
     print(f"Heatmap saved → {out_path}")
 
 
 # ----- Main detect function -----
-def detect_mislabels(split = "train"):
+def detect_mislabels(split = "train",embed_dir = EMBED_DIR, reports_dir = REPORTS_DIR):
     print(f"\n{'='*30}")
     print(f"MISLABEL DETECTION — {split.upper()} SET")
     print(f"{'='*30}")
 
-    embeddings, labels, paths = load_embeddings(split)
+    embeddings, labels, paths = load_embeddings(split, embed_dir)
     reduced = reduce_dimensions(embeddings)
 
     # ----- Run all Three methods -----
@@ -294,10 +297,12 @@ def detect_mislabels(split = "train"):
     ]].to_string(index=False))
 
     # ── Visualize confusion matrix
-    plot_confusion_matrix(labels, nn_pred, split)
+    plot_confusion_matrix(labels, nn_pred, split, reports_dir=reports_dir)
 
     # ── Save report
-    out_path = f"{REPORTS_DIR}/{split}_mislabel_report.csv"
+    reports_path = Path(reports_dir)
+    reports_path.mkdir(parents=True, exist_ok=True)
+    out_path = reports_path / f"{split}_mislabel_report.csv"
     df.to_csv(out_path, index=False)
     print(f"\n Report saved → {out_path}")
 

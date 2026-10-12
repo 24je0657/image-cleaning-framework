@@ -179,7 +179,7 @@ def run_pipeline(cfg: PipelineConfig, split: str) -> dict:
         _, ok = run_step(
             f"Step 1 — Format Distribution Scan ({label})",
             scan_format_distribution,
-            splits=[split] if split else [""]
+            splits=[split] if split else [""],root_dir=str(cfg.data_dir)
         )
         summary["steps"]["format_scan"] = ok
 
@@ -204,20 +204,20 @@ def run_pipeline(cfg: PipelineConfig, split: str) -> dict:
         print(f"#  Step 3 — Embeddings ({label}) — SKIPPED (cache exists)")
         print(f"{'#'*60}")
         from src.embeddings import load_embeddings
-        embeddings, labels, paths = load_embeddings(split)
+        embeddings, labels, paths = load_embeddings(split,embed_dir=str(cfg.embeddings_dir))
         summary["steps"]["embeddings"] = True
     else:
         from src.embeddings import extract_embeddings, load_embeddings
         _, ok = run_step(
             f"Step 3 — ResNet50 Embedding Extraction ({label})",
-            extract_embeddings, split
+            extract_embeddings, split,root_dir=str(cfg.data_dir),embed_dir=str(cfg.embeddings_dir)
         )
         summary["steps"]["embeddings"] = ok
         if not ok:
             print("    Embeddings failed — cannot continue")
             summary["success"] = False
             return summary
-        embeddings, labels, paths = load_embeddings(split)
+        embeddings, labels, paths = load_embeddings(split,embed_dir=str(cfg.embeddings_dir))
 
     # ── Step 4: Duplicates ────────────────────────────────────────
     if cfg.run_duplicates:
@@ -227,8 +227,8 @@ def run_pipeline(cfg: PipelineConfig, split: str) -> dict:
                                     find_near_duplicates)
 
         def run_duplicates():
-            df_e, flagged  = find_exact_duplicates(paths, split)
-            df_n, near_f   = find_near_duplicates(embeddings, paths, split)
+            df_e, flagged  = find_exact_duplicates(paths, split,reports_dir=str(cfg.reports_dir))
+            df_n, near_f   = find_near_duplicates(embeddings, paths, split,reports_dir=str(cfg.reports_dir))
 
             df_combined = df_e.copy()
             if not df_n.empty:
@@ -268,6 +268,8 @@ def run_pipeline(cfg: PipelineConfig, split: str) -> dict:
             f"Step 5 — Blur Detection ({label}) [adaptive p{cfg.blur_percentile}]",
             detect_blur, split,
             use_adaptive=True,
+            root_dir = str(cfg.data_dir),
+            reports_dir = str(cfg.reports_dir),
             percentile=cfg.blur_percentile
         )
         summary["steps"]["blur"] = ok
@@ -277,12 +279,12 @@ def run_pipeline(cfg: PipelineConfig, split: str) -> dict:
         from src.quality import detect_noise , refine_noise_flags
         _, ok_noise = run_step(
             f"Step 6 — Noise Detection ({label}) [adaptive]",
-            detect_noise, split, use_adaptive=True
+            detect_noise, split, use_adaptive=True,root_dir=str(cfg.data_dir),reports_dir=str(cfg.reports_dir)
         )
         if ok_noise:
             _, ok_refine = run_step(
                 f"Step 6b — Noise Flag Refinement ({label})",
-                refine_noise_flags, split
+                refine_noise_flags, split,reports_dir=str(cfg.reports_dir)
             )
         else:
             ok_refine = False
@@ -293,7 +295,7 @@ def run_pipeline(cfg: PipelineConfig, split: str) -> dict:
         from src.outliers import detect_outliers
         _, ok = run_step(
             f"Step 7 — Outlier Detection ({label})",
-            detect_outliers, split
+            detect_outliers, split,embed_dir=str(cfg.embeddings_dir),reports_dir=str(cfg.reports_dir)
         )
         summary["steps"]["outliers"] = ok
 
@@ -302,7 +304,7 @@ def run_pipeline(cfg: PipelineConfig, split: str) -> dict:
         from src.mislabel import detect_mislabels
         _, ok = run_step(
             f"Step 8 — Mislabel Detection ({label})",
-            detect_mislabels, split
+            detect_mislabels, split,embed_dir=str(cfg.embeddings_dir),reports_dir=str(cfg.reports_dir)
         )
         summary["steps"]["mislabels"] = ok
 
@@ -310,7 +312,7 @@ def run_pipeline(cfg: PipelineConfig, split: str) -> dict:
     from src.decision_engine import build_master_report
     df_master, ok = run_step(
         f"Step 9 — Decision Engine ({label})",
-        build_master_report, split
+        build_master_report, split,reports_dir=str(cfg.reports_dir)
     )
     summary["steps"]["decision_engine"] = ok
 
