@@ -171,7 +171,7 @@ def detect_outliers(split = "train",embed_dir=EMBED_DIR,reports_dir=REPORTS_DIR)
     print(f"{'='*30}")
 
     # ----- Load Embeddings -----
-    embeddings, labels, paths = load_embeddings(split, embed_dir)
+    embeddings, labels, paths = load_embeddings(split, embed_dir=embed_dir)
 
     # ----- Global Isolation Forest -----
     reduced, pca, scaler = Reduce_Dimensions(embeddings)
@@ -196,6 +196,10 @@ def detect_outliers(split = "train",embed_dir=EMBED_DIR,reports_dir=REPORTS_DIR)
     )
 
     # ----- Combined Flag Outlier if either method flags it -----
+    # Combine global and per-class Isolation Forest results.
+    # Global detection catches dataset-wide anomalies, while per-class
+    # detection can identify anomalies relative to a particular class.
+    # An image is flagged if either detector identifies it.
 
     df_final["is_outlier"] = (
         df_final["global_outlier"] | df_final["per_class_outlier"]

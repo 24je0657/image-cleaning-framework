@@ -1,4 +1,4 @@
-from matplotlib.path import Path
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import os
@@ -27,10 +27,10 @@ K_MEANS = N_CLASSES * 5
 
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
-def load_embeddings(split = "train"):
-    embeddings = np.load(f"{EMBED_DIR}/{split}_embeddings.npy")
-    labels = np.load(f"{EMBED_DIR}/{split}_labels.npy", allow_pickle=True)
-    paths = np.load(f"{EMBED_DIR}/{split}_file_paths.npy", allow_pickle=True)
+def load_embeddings(split = "train",embed_dir = EMBED_DIR):
+    embeddings = np.load(f"{embed_dir}/{split}_embeddings.npy")
+    labels = np.load(f"{embed_dir}/{split}_labels.npy", allow_pickle=True)
+    paths = np.load(f"{embed_dir}/{split}_file_paths.npy", allow_pickle=True)
 
     print(f"Loaded {split} embeddings: {embeddings.shape}")
     return embeddings, labels, paths
@@ -235,7 +235,7 @@ def detect_mislabels(split = "train",embed_dir = EMBED_DIR, reports_dir = REPORT
     print(f"MISLABEL DETECTION — {split.upper()} SET")
     print(f"{'='*30}")
 
-    embeddings, labels, paths = load_embeddings(split, embed_dir)
+    embeddings, labels, paths = load_embeddings(split, embed_dir=embed_dir)
     reduced = reduce_dimensions(embeddings)
 
     # ----- Run all Three methods -----

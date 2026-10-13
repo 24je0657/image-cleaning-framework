@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
+from pathlib import Path
 
 # ----- Configuration -----
 REPORTS_DIR = "reports"
@@ -8,7 +9,7 @@ BLUR_REMOVE_THRESHOLD = 50
 REMOVE_PRIORITY = 10
 REVIEW_PRIORITY = 5
 
-CLASSES = ["cat","dog","elephant","horse", "lion"]
+
 
 
 # Priority weights - How severe each issue is
@@ -417,7 +418,7 @@ def build_master_report(split = "train",reports_dir=REPORTS_DIR):
 
     print(f"\nPER CLASS SUMMARY ------------------------")
 
-    for cls in CLASSES:
+    for cls in sorted(master["class"].dropna().unique()):
 
         cls_df = master[
             master["class"] == cls
@@ -452,8 +453,11 @@ def build_master_report(split = "train",reports_dir=REPORTS_DIR):
 
     # ----- Save Master Report -----
 
+    reports_path =Path(reports_dir)
+    reports_path.mkdir(parents=True, exist_ok=True)
+
     master_path = (
-        f"{REPORTS_DIR}/{split}_master_report.csv"
+        reports_path/f"{split}_master_report.csv"
     )
 
     master.to_csv(
@@ -531,7 +535,7 @@ def build_master_report(split = "train",reports_dir=REPORTS_DIR):
     summary_df = pd.DataFrame([summary])
 
     summary_path = (
-        f"{REPORTS_DIR}/{split}_cleaning_summary.csv"
+        reports_path/f"{split}_cleaning_summary.csv"
     )
 
     summary_df.to_csv(

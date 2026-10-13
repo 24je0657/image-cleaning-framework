@@ -40,6 +40,47 @@ During preprocessing, the framework detected that 247 out of 300 validation hors
 
 The framework automatically detected the anomaly and converted the PNG files to JPG (quality=95), with MSE-based verification, using `src/format_converter.py`. Subsequent analysis showed that the format difference was **not the root cause of the higher horse reconstruction-error distribution**.
 
+## Cross-Dataset Validation — Intel Image Classification
+- **Dataset source:** [Intel Image Classification — Kaggle](https://www.kaggle.com/datasets/puneet6060/intel-image-classification)
+
+The framework was additionally evaluated on the Intel Image Classification
+dataset to assess its behavior on a different visual domain and a six-class
+scene classification dataset.
+
+- **Dataset:** Intel Image Classification
+- **Classes:** Buildings, Forest, Glacier, Mountain, Sea, Street
+- **Training images:** 14,034
+- **Test images:** 3,000
+- **Total images processed:** 17,034
+
+### Cleaning Results
+
+| Result | Training | Test | Total |
+|---|---:|---:|---:|
+| Clean | 11,106 | 2,371 | 13,477 |
+| Review | 2,595 | 525 | 3,120 |
+| Remove | 333 | 104 | 437 |
+| **Total** | **14,034** | **3,000** | **17,034** |
+
+The pipeline completed successfully for both splits, and all selected clean
+images were exported without reported image-copy failures.
+
+### Detector Validation Notes
+
+- **Outlier detection:** Global and per-class outlier flags are combined using
+  a logical OR. An image is flagged when either detector identifies it.
+- **Noise refinement:** The autoencoder initially flagged 571 training images
+  and 124 test images. These were classified as `review_possible_ood` by the
+  refinement rules rather than confirmed noisy images. The decision engine
+  uses this verdict as a low-confidence signal.
+- **Near-duplicate detection:** The training report flagged 793 images:
+  695 POSSIBLE, 65 LIKELY, and 33 DEFINITE. Confidence tiers are used to
+  distinguish uncertain matches from stronger duplicate candidates.
+
+These results demonstrate that the pipeline executed on the Intel dataset.
+They are an initial cross-dataset validation, not a claim that every detector
+achieves perfect classification accuracy.
+
 ## Project Pipeline
 
 <p align="center">
