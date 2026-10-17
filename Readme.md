@@ -53,14 +53,77 @@ scene classification dataset.
 - **Test images:** 3,000
 - **Total images processed:** 17,034
 
-### Cleaning Results
+## Cleaning Results
 
-| Result | Training | Test | Total |
-|---|---:|---:|---:|
-| Clean | 11,106 | 2,371 | 13,477 |
-| Review | 2,595 | 525 | 3,120 |
-| Remove | 333 | 104 | 437 |
-| **Total** | **14,034** | **3,000** | **17,034** |
+### Animal Dataset
+
+| Split | Input | Clean | Remove | Review |
+|-------|------:|------:|-------:|-------:|
+| Train | 13,474 | 11,099 | 627 (4.65%) | 1,748 (12.97%) |
+| Val | 1,497 | 1,260 | 66 (4.41%) | 171 (11.42%) |
+| **Total** | **14,971** | **12,359** | **693** | **1,919** |
+
+*Reports: `reports/Animal/train_master_report.csv`, `reports/Animal/val_master_report.csv`*
+
+### Training Set — Issue Breakdown
+
+| Issue Type | Count | Percentage |
+|------------|------:|----------:|
+| Exact duplicates | 408 | 3.03% |
+| Near duplicates (unique images) | 527 | 3.91% |
+| Blurry images | 676 | 5.02% |
+| Noisy (confirmed after refinement) | 8 | 0.06% |
+| Outliers | 951 | 7.06% |
+| Mislabeled | 174 | 1.29% |
+
+### Validation Set — Issue Breakdown
+
+| Issue Type | Count | Percentage |
+|------------|------:|----------:|
+| Exact duplicates | 1 | 0.07% |
+| Near duplicates (unique images) | 11 | 0.73% |
+| Blurry images | 75 | 5.01% |
+| Outliers | 132 | 8.82% |
+| Mislabeled | 60 | 4.01% |
+
+
+## Cross-Dataset Validation
+
+To assess dataset independence, the complete pipeline was run on the
+[Intel Image Classification dataset](https://www.kaggle.com/datasets/puneet6060/intel-image-classification)
+— a six-class scene classification dataset from a different visual domain —
+without modifying any source code.
+
+| Metric | Animal Dataset | Intel Dataset |
+|--------|---------------|--------------|
+| Visual domain | Animals | Scenes |
+| Classes | 5 | 6 |
+| Input images | 14,971 | 17,034 |
+| Clean images | 12,359 (82.6%) | 13,477 (79.1%) |
+| Review | 1,919 | 3,120 |
+| Remove | 693 | 437 |
+| Code changes required | — | **0** |
+
+The pipeline auto-discovered the six Intel classes, calibrated
+per-class blur and noise thresholds to the scene image distribution,
+and exported clean images without any dataset-specific configuration.
+
+These figures describe the pipeline's decisions on each dataset.
+They are not claims of detector accuracy on Intel images, which
+were not manually validated.
+
+### Intel — Detector Notes
+
+- **Outlier detection:** Global and per-class Isolation Forest flags
+  are combined with logical OR. An image is flagged when either
+  detector identifies it as anomalous.
+- **Noise refinement:** 571 training images initially flagged by the
+  autoencoder were all classified as `review_possible_ood` — no images
+  reached `confirmed_noisy`. The Decision Engine treats this as a
+  low-confidence signal.
+- **Near-duplicate detection:** 793 unique training images were flagged
+  across three confidence tiers: 33 DEFINITE, 65 LIKELY, 695 POSSIBLE.
+  These are unique flagged images, not pair counts.
 
 The pipeline completed successfully for both splits, and all selected clean
 images were exported without reported image-copy failures.
@@ -638,7 +701,7 @@ cleaning improves generalization to genuinely external data.
 - **Noise refinement:** The Autoencoder initially flagged 635 training images and 54 validation images. After refinement, only 19 training images and 9 validation images were classified as refined noisy samples, while the majority of initial flags were categorized as possible OOD cases.
 - **Val/horse format anomaly:** 247/300 validation horse images were PNG while all other classes were JPG; the anomaly was detected and corrected automatically by the framework. Subsequent analysis showed that the format difference was not the root cause of the higher horse reconstruction-error distribution.
 - **Elephant class** has the highest mislabel rate (train 2.1%, val 9.0%) — consistent with visual similarity to lion in savanna backgrounds.
-- **Val/horse format anomaly** — 247/300 images were PNG vs JPG for all other classes; detected and corrected automatically by the framework.
+
 
 ## Interactive Streamlit Dashboard
 
@@ -695,14 +758,20 @@ Download the Animals dataset from Kaggle and place it under `data/raw/Animal/`.
 ### 3. Run full pipeline
 
 ```bash
-# Run all 9 steps for both splits
-python run_pipeline.py --split both --skip-embeddings
+# Animal dataset
+python run_pipeline.py \
+    --data_dir  data/raw/Animal \
+    --output_dir data_clean/Animal \
+    --skip-embeddings
 
-# Run train only
-python run_pipeline.py --split train
+# Any other dataset — zero code changes
+python run_pipeline.py \
+    --data_dir  /path/to/your/dataset \
+    --output_dir /path/to/clean/output
+```
 
-# Run from scratch (re-extracts embeddings)
-python run_pipeline.py --split both
+The pipeline auto-discovers splits and classes from the folder structure.
+Reports are saved to `reports/<dataset_name>/`.
 ```
 The master pipeline executes the modules in dependency order:
 
