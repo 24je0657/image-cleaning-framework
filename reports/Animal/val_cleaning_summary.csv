@@ -1,0 +1,2 @@
+split,total_images,clean,to_remove,to_review,exact_dup,near_dup,blurry,noisy,outlier,mislabeled
+val,1497,1260,66,171,1,11,75,9,145,60

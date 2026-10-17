@@ -1,0 +1,2 @@
+split,total_images,clean,to_remove,to_review,exact_dup,near_dup,blurry,noisy,outlier,mislabeled
+test,3000,2371,104,525,3,86,153,0,264,212

@@ -1,0 +1,24 @@
+{
+  "data_dir": "data/raw/intel",
+  "output_dir": "data/processed/intel",
+  "splits": [
+    "test",
+    "train"
+  ],
+  "classes": [
+    "buildings",
+    "forest",
+    "glacier",
+    "mountain",
+    "sea",
+    "street"
+  ],
+  "run_duplicates": true,
+  "run_blur": true,
+  "run_noise": true,
+  "run_outliers": true,
+  "run_mislabels": true,
+  "blur_percentile": 5,
+  "cosine_threshold": 0.97,
+  "contamination": 0.05
+}

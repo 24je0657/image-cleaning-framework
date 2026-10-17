@@ -1,0 +1,2 @@
+split,total_images,clean,to_remove,to_review,exact_dup,near_dup,blurry,noisy,outlier,mislabeled
+train,13474,11099,627,1748,408,527,676,19,951,174

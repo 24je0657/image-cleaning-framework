@@ -128,21 +128,7 @@ were not manually validated.
 The pipeline completed successfully for both splits, and all selected clean
 images were exported without reported image-copy failures.
 
-### Detector Validation Notes
 
-- **Outlier detection:** Global and per-class outlier flags are combined using
-  a logical OR. An image is flagged when either detector identifies it.
-- **Noise refinement:** The autoencoder initially flagged 571 training images
-  and 124 test images. These were classified as `review_possible_ood` by the
-  refinement rules rather than confirmed noisy images. The decision engine
-  uses this verdict as a low-confidence signal.
-- **Near-duplicate detection:** The training report flagged 793 images:
-  695 POSSIBLE, 65 LIKELY, and 33 DEFINITE. Confidence tiers are used to
-  distinguish uncertain matches from stronger duplicate candidates.
-
-These results demonstrate that the pipeline executed on the Intel dataset.
-They are an initial cross-dataset validation, not a claim that every detector
-achieves perfect classification accuracy.
 
 ## Project Pipeline
 
@@ -755,18 +741,20 @@ pip install -r requirements.txt
 
 Download the Animals dataset from Kaggle and place it under `data/raw/Animal/`.
 
-### 3. Run full pipeline
+### 3. Run the pipeline
+
+**Animal dataset**
 
 ```bash
-# Animal dataset
 python run_pipeline.py \
-    --data_dir  data/raw/Animal \
+    --data_dir data/raw/Animal \
     --output_dir data_clean/Animal \
-    --skip-embeddings
+    --skip-embeddings \
+    --skip-preprocessing
 
 # Any other dataset — zero code changes
 python run_pipeline.py \
-    --data_dir  /path/to/your/dataset \
+    --data_dir /path/to/your/dataset \
     --output_dir /path/to/clean/output
 ```
 
@@ -842,7 +830,7 @@ metric trained on human judgments) or add severity tiering
 
 ## Future Improvements
 
-- Support multi-class custom datasets beyond the current 5-class animal dataset.
+- Expand validation across additional datasets, visual domains, and class distributions.
 - Add active learning for automatic relabeling of HIGH-confidence mislabels.
 - Learn Decision Engine weights automatically from human-reviewed ground truth.
 - Support distributed processing for datasets exceeding 100k images.
