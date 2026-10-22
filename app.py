@@ -432,13 +432,13 @@ with tab_overview:
         ca.markdown(f"**{cls.title()}**  \n`{ctotal} total`")
         with cb:
             st.markdown(f"✅ Clean: **{cclean}**")
-            st.progress(int(cclean) / ctotal)
+            st.progress(int(cclean) / ctotal if ctotal>0 else 0)
         with cc:
             st.markdown(f"👁 Review: **{creview}**")
-            st.progress(int(creview) / ctotal)
+            st.progress(int(creview) / ctotal if ctotal>0 else 0)
         with cd:
             st.markdown(f"❌ Remove: **{cremove}**")
-            st.progress(int(cremove) / ctotal)
+            st.progress(int(cremove) / ctotal if ctotal>0 else 0)
         st.markdown("")
 
     st.markdown("---")

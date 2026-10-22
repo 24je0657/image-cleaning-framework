@@ -11,14 +11,30 @@ data_clean/
 
 # Generated embeddings
 embeddings/
+# src subdirectory artifacts created during development
+src/embeddings/
+src/reports/
 
 # Generated reports
 reports/*.csv
 reports/*.png
 reports/*.npy
 
+# Stray root-level reports from pre-namespacing runs
+reports/pipeline_config.json
+reports/cleaning_report.csv
+reports/clean_train.csv
+
+# Diagram HTML files
+diagrams/
+
+
 # Model checkpoints
 models/*.pth
+
+# Notebook experiment outputs
+notebooks/experiment_results/
+notebooks/validation_outputs/
 
 # Local application and verification files
 .streamlit/

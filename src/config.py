@@ -118,7 +118,7 @@ class PipelineConfig:
         return self.output_dir / split if split else self.output_dir
 
     def embedding_path(self, split: str, kind: str) -> Path:
-        """e.g. embeddings/train_embeddings.npy"""
+        """e.g. embeddings/Animal/train_embeddings.npy"""
         prefix = f"{split}_" if split else "flat_"
         return self.embeddings_dir / f"{prefix}{kind}.npy"
 

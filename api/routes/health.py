@@ -17,9 +17,12 @@ async def health():
         version       = "1.0.0",
         models_loaded = Path("models/autoencoder.pth").exists(),
         reports_ready = {
-            "train_master"     : Path("reports/train_master_report.csv").exists(),
-            "val_master"       : Path("reports/val_master_report.csv").exists(),
-            "train_embeddings" : Path("embeddings/train_embeddings.npy").exists(),
+            "animal_train_master"     : Path("reports/Animal/train_master_report.csv").exists(),
+            "animal_val_master"       : Path("reports/Animal/val_master_report.csv").exists(),
+            "intel_train_master"      : Path("reports/intel/train_master_report.csv").exists(),
+            "intel_test_master"       : Path("reports/intel/test_master_report.csv").exists(),
+            "animal_embeddings"       : Path("embeddings/Animal/train_embeddings.npy").exists(),
+            "intel_embeddings"        : Path("embeddings/intel/train_embeddings.npy").exists(),
         },
         timestamp = datetime.now(timezone.utc)
     )

@@ -34,11 +34,11 @@ np.random.seed(RANDOM_SEED)
 
 # ─── LOAD ─────────────────────────────────────────────────────────────────────
 
-def load_split(split: str):
-    embs   = np.load(f"embeddings/{split}_embeddings.npy")
-    labels = np.load(f"embeddings/{split}_labels.npy",
+def load_split(split: str, dataset: str = "Animal"):
+    embs   = np.load(f"embeddings/{dataset}/{split}_embeddings.npy")
+    labels = np.load(f"embeddings/{dataset}/{split}_labels.npy",
                      allow_pickle=True)
-    paths  = np.load(f"embeddings/{split}_file_paths.npy",
+    paths  = np.load(f"embeddings/{dataset}/{split}_file_paths.npy",
                      allow_pickle=True)
     return embs, labels, paths
 
@@ -76,7 +76,7 @@ def build_dataset_B_clean(embs, labels, paths):
     using full path first, filename fallback second.
     Reports match rate so path issues are visible.
     """
-    master     = pd.read_csv("reports/train_master_report.csv")
+    master = pd.read_csv("reports/Animal/train_master_report.csv")
     clean_rows = master[master["verdict"] == "CLEAN"]
 
     full_idx, name_idx = build_path_index(paths)
@@ -190,8 +190,8 @@ def run_experiment(name        : str,
 
 def main():
     print("Loading cached embeddings...")
-    X_tr, y_tr, p_tr = load_split("train")
-    X_vl, y_vl, _    = load_split("val")
+    X_tr, y_tr, p_tr = load_split("train", dataset="Animal")
+    X_vl, y_vl, _    = load_split("val",   dataset="Animal")
     print(f"Train: {X_tr.shape}    Val: {X_vl.shape}")
 
     X_B, y_B = build_dataset_B_clean(X_tr, y_tr, p_tr)
