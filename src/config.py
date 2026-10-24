@@ -3,11 +3,10 @@
 Central configuration for the Image Cleaning Framework.
 All modules import from here — no more hardcoded paths.
 """
-from pathlib import Path
-from dataclasses import dataclass, field
-from typing import List, Optional
 import json
-
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import List, Optional
 
 @dataclass
 class PipelineConfig:

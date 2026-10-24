@@ -1,20 +1,15 @@
+# Standard library
 import os
+from pathlib import Path
+
+# Third-party libraries
 import cv2
 import numpy as np
 import pandas as pd
-from pathlib import Path
-
-
-# ==============================
-# AutoEncoder (PyTorh) 
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
-import PIL.Image as image
-
-from src.mislabel import EMBED_DIR
-# ==============================
-
+from PIL import Image
 
 
 # ----- Configuration -----
@@ -371,7 +366,7 @@ def compute_reconstruction_error(model, image_path):
     High Error => Image is Noisy/Anamolous"""
 
     try:
-        img = image.open(image_path).convert("RGB")
+        img = Image.open(image_path).convert("RGB")
         img_tensor = ae_transform(img).unsqueeze(0).to(DEVICE) # (1,3,128,128)
 
         with torch.no_grad():
@@ -389,7 +384,7 @@ def compute_reconstruction_error(model, image_path):
 # ===========================
 # Dataset Level Noise Detection using AutoEncoder
 
-def detect_noise(split="train", use_adaptive=True,root_dir=ROOT_DIR, reports_dir=REPORTS_DIR,embed_dir=EMBED_DIR):
+def detect_noise(split="train", use_adaptive=True,root_dir=ROOT_DIR, reports_dir=REPORTS_DIR):
     """Detect noisy images using AutoEncoder reconstruction error."""
 
     split_path = Path(root_dir) / split

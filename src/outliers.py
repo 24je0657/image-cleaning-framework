@@ -1,13 +1,17 @@
-import numpy as np
-import pandas as pd
+# Standard library
 import os
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-from sklearn.ensemble import IsolationForest
+from pathlib import Path
+
+# Third-party libraries
 import matplotlib
 matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
-from pathlib import Path
+import numpy as np
+import pandas as pd
+from sklearn.decomposition import PCA
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 
 # ----- Configuration -----

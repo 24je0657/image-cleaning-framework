@@ -10,12 +10,15 @@ Safe operation:
   - Verification pass confirms conversion quality
   - Only after verification: originals removed
 """
+# Standard library
 import os
+from pathlib import Path
+
+# Third-party libraries
 import cv2
 import numpy as np
-from pathlib import Path
-from PIL     import Image
 import pandas as pd
+from PIL import Image
 
 VALID_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 JPG_QUALITY      = 95   # high quality to minimize conversion loss

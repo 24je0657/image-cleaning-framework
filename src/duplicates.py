@@ -1,17 +1,21 @@
+# Standard library
+import os
+import time
+from pathlib import Path
+
+# Third-party libraries
+import imagehash
 import numpy as np
 import pandas as pd
-import imagehash
 from PIL import Image
-from pathlib import Path
+from pybktree import BKTree
 from sklearn.metrics.pairwise import cosine_similarity
+
+# Local imports
 try:
     from src.embeddings import load_embeddings
 except ModuleNotFoundError:
     from embeddings import load_embeddings
-import os
-
-from pybktree import BKTree
-import time
 
 
 

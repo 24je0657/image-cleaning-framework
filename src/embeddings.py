@@ -1,11 +1,13 @@
+# Standard library
 import os
+from pathlib import Path
+
+# Third-party libraries
 import numpy as np
 import torch
 import torchvision.transforms as transforms
-
-from torchvision.models import resnet50, ResNet50_Weights
 from PIL import Image
-from pathlib import Path
+from torchvision.models import ResNet50_Weights, resnet50
 
 
 # ----- Configuration -----

@@ -1,8 +1,11 @@
+# Standard library
 import os
-import cv2
-from PIL import Image
-import pandas as pd
 from pathlib import Path
+
+# Third-party libraries
+import cv2
+import pandas as pd
+from PIL import Image
 
 VALID_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png"]
 

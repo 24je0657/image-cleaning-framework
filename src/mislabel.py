@@ -1,18 +1,20 @@
-from pathlib import Path
-import numpy as np
-import pandas as pd
+# Standard library
 import os
-from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler, normalize
-from sklearn.neighbors import NearestNeighbors
 from collections import Counter
+from pathlib import Path
+
+# Third-party libraries
 import matplotlib
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-from sklearn.cluster import DBSCAN
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from sklearn.cluster import DBSCAN, KMeans
+from sklearn.decomposition import PCA
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import StandardScaler, normalize
 
 
 
