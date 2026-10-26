@@ -167,14 +167,19 @@ def export_clean_images(cfg: PipelineConfig, split: str) -> dict:
 
 # ─── SINGLE SPLIT PIPELINE ────────────────────────────────────────────────────
 
-def run_pipeline(cfg: PipelineConfig, split: str) -> dict:
+def run_pipeline(
+    cfg: PipelineConfig,
+    split: str,
+    skip_embeddings: bool = False,
+    skip_preprocessing: bool = False,
+) -> dict:
     summary = {"split": split, "steps": {}, "success": True}
 
     split_path = cfg.split_path(split)
     label      = split if split else "all"
 
     # ── Step 1: Format scan ───────────────────────────────────────
-    if not args.skip_preprocessing:
+    if not skip_preprocessing:
         from src.format_converter import scan_format_distribution
         _, ok = run_step(
             f"Step 1 — Format Distribution Scan ({label})",
@@ -184,7 +189,7 @@ def run_pipeline(cfg: PipelineConfig, split: str) -> dict:
         summary["steps"]["format_scan"] = ok
 
     # ── Step 2: Image validation ──────────────────────────────────
-    if not args.skip_preprocessing:
+    if not skip_preprocessing:
         from src.preprocessing import validate_dataset
         df_valid, ok = run_step(
             f"Step 2 — Image Validation ({label})",
@@ -199,7 +204,7 @@ def run_pipeline(cfg: PipelineConfig, split: str) -> dict:
     emb_path = cfg.embedding_path(split, "embeddings")
     cfg.embeddings_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.skip_embeddings and emb_path.exists():
+    if skip_embeddings and emb_path.exists():
         print(f"\n{'#'*60}")
         print(f"#  Step 3 — Embeddings ({label}) — SKIPPED (cache exists)")
         print(f"{'#'*60}")
@@ -346,94 +351,176 @@ def run_pipeline(cfg: PipelineConfig, split: str) -> dict:
     return summary
 
 
+def run_pipeline_config(
+    cfg: PipelineConfig,
+    skip_embeddings: bool = False,
+    skip_preprocessing: bool = False,
+) -> dict:
+    """
+    Run the image-cleaning pipeline using an existing PipelineConfig.
+
+    This function does not depend on argparse or a global args variable.
+
+    Args:
+        cfg: Configured dataset and pipeline settings.
+        skip_embeddings: Reuse cached embeddings when available.
+        skip_preprocessing: Skip format scanning and image validation.
+
+    Returns:
+        Dictionary containing processed splits, their summaries,
+        and the overall success status.
+    """
+
+    # Validate that there are splits to process.
+    splits = list(cfg.splits)
+
+    if not splits:
+        return {
+            "splits": [],
+            "summaries": {},
+            "success": False,
+            "error": "No dataset splits were found to process.",
+        }
+
+    # Create output directories.
+    cfg.output_dir.mkdir(parents=True, exist_ok=True)
+    cfg.reports_dir.mkdir(parents=True, exist_ok=True)
+    cfg.embeddings_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save configuration for reproducibility.
+    cfg.to_json(cfg.reports_dir / "pipeline_config.json")
+
+    summaries = {}
+
+    # Process each split independently.
+    for split in splits:
+        label = split if split else "all"
+
+        print(f"\n\n{'=' * 60}")
+        print(f"    PROCESSING: {label.upper()}")
+        print(f"{'=' * 60}")
+
+        summaries[split] = run_pipeline(
+            cfg,
+            split,
+            skip_embeddings=skip_embeddings,
+            skip_preprocessing=skip_preprocessing,
+        )
+
+    # Overall success requires at least one processed split
+    # and a successful result for every processed split.
+    all_ok = bool(summaries) and all(
+        summary.get("success", False)
+        for summary in summaries.values()
+    )
+
+    return {
+        "splits": splits,
+        "summaries": summaries,
+        "success": all_ok,
+    }
+
+
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 def main():
-    global args
     args = parse_args()
 
     # ── Build config ──────────────────────────────────────────────
     cfg = PipelineConfig(
-        data_dir         = Path(args.data_dir),
-        output_dir       = Path(args.output_dir),
-        run_duplicates   = not args.no_duplicates,
-        run_blur         = not args.no_blur,
-        run_noise        = not args.no_noise,
-        run_outliers     = not args.no_outliers,
-        run_mislabels    = not args.no_mislabels,
-        blur_percentile  = args.blur_percentile,
-        contamination    = args.contamination,
-        cosine_threshold = args.cosine_threshold,
+        data_dir=Path(args.data_dir),
+        output_dir=Path(args.output_dir),
+        run_duplicates=not args.no_duplicates,
+        run_blur=not args.no_blur,
+        run_noise=not args.no_noise,
+        run_outliers=not args.no_outliers,
+        run_mislabels=not args.no_mislabels,
+        blur_percentile=args.blur_percentile,
+        contamination=args.contamination,
+        cosine_threshold=args.cosine_threshold,
     )
 
-    # Create output directories
-    cfg.output_dir.mkdir(parents=True,  exist_ok=True)
-    cfg.reports_dir.mkdir(parents=True, exist_ok=True)
-    cfg.embeddings_dir.mkdir(parents=True, exist_ok=True)
-
-    # Print config
+    # ── Print config ──────────────────────────────────────────────
     print("\n" + "=" * 60)
     print("    INTELLIGENT IMAGE DATA CLEANING FRAMEWORK")
     print("=" * 60)
     print(cfg.summary())
-    print(f"\n  Modules          : "
-          f"{'dup ' if cfg.run_duplicates else ''}"
-          f"{'blur ' if cfg.run_blur else ''}"
-          f"{'noise ' if cfg.run_noise else ''}"
-          f"{'outlier ' if cfg.run_outliers else ''}"
-          f"{'mislabel' if cfg.run_mislabels else ''}")
+
+    print(
+        f"\n  Modules          : "
+        f"{'dup ' if cfg.run_duplicates else ''}"
+        f"{'blur ' if cfg.run_blur else ''}"
+        f"{'noise ' if cfg.run_noise else ''}"
+        f"{'outlier ' if cfg.run_outliers else ''}"
+        f"{'mislabel' if cfg.run_mislabels else ''}"
+    )
+
     print(f"  Skip embeddings  : {args.skip_embeddings}")
+    print(f"  Skip preprocess  : {args.skip_preprocessing}")
     print("=" * 60)
 
-    # Save config for reproducibility
-    cfg.to_json(cfg.reports_dir / "pipeline_config.json")
+    # ── Run pipeline using the reusable configuration entry point ─
+    t_start = time.time()
 
-    # Run pipeline for each split
-    t_start   = time.time()
-    summaries = {}
+    result = run_pipeline_config(
+        cfg,
+        skip_embeddings=args.skip_embeddings,
+        skip_preprocessing=args.skip_preprocessing,
+    )
 
-    for split in cfg.splits:
-        label = split if split else "all"
-        print(f"\n\n{'='*60}")
-        print(f"    PROCESSING: {label.upper()}")
-        print(f"{'='*60}")
-        summaries[split] = run_pipeline(cfg, split)
+    t_total = time.time() - t_start
+    summaries = result["summaries"]
+    if not result["success"] and result.get("error"):
+       print(f"\n❌ Pipeline failed: {result['error']}")
 
     # ── Final summary ─────────────────────────────────────────────
-    t_total = time.time() - t_start
-
-    print(f"\n\n{'='*60}")
+    print(f"\n\n{'=' * 60}")
     print(f"    PIPELINE COMPLETE  —  {t_total:.1f}s total")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
-    all_ok = True
+    # Respect the overall result returned by run_pipeline_config().
+    all_ok = result["success"]
+
     for split, summary in summaries.items():
-        label   = split if split else "all"
-        steps   = summary.get("steps",   {})
-        failed  = [k for k, v in steps.items() if not v]
+        label = split if split else "all"
+        steps = summary.get("steps", {})
+        failed = [k for k, v in steps.items() if not v]
         results = summary.get("results", {})
-        export  = summary.get("export",  {})
+        export = summary.get("export", {})
 
         print(f"\n  {label.upper()}:")
+
         if failed:
             print(f"    ❌ Failed steps : {', '.join(failed)}")
             all_ok = False
         else:
-            print(f"    ✅ All steps passed")
+            print("    ✅ All steps passed")
 
         if results:
             print(f"    Total    : {results['total']:>6,}")
-            print(f"    Clean    : {results['clean']:>6,}  ({results['clean_pct']}%)")
-            print(f"    Remove   : {results['remove']:>6,}  ({results['remove_pct']}%)")
-            print(f"    Review   : {results['review']:>6,}  ({results['review_pct']}%)")
+            print(
+                f"    Clean    : {results['clean']:>6,} "
+                f"({results['clean_pct']}%)"
+            )
+            print(
+                f"    Remove   : {results['remove']:>6,} "
+                f"({results['remove_pct']}%)"
+            )
+            print(
+                f"    Review   : {results['review']:>6,} "
+                f"({results['review_pct']}%)"
+            )
 
         if export:
-            print(f"    Exported : {export.get('copied',0):>6,} images → {export.get('out_dir','')}")
+            print(
+                f"    Exported : {export.get('copied', 0):>6,} "
+                f"images → {export.get('out_dir', '')}"
+            )
 
     print(f"\n  Clean dataset → {cfg.output_dir}")
     print(f"  Reports       → {cfg.reports_dir}")
-    print(f"  Dashboard     → streamlit run app.py")
-    print(f"  API           → python run_api.py")
+    print("  Dashboard     → streamlit run app.py")
+    print("  API           → python run_api.py")
     print()
 
     sys.exit(0 if all_ok else 1)
