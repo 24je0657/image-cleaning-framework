@@ -44,3 +44,5 @@ notebooks/visual_inspection_outputs/
 notebooks/visual_inspection_outputs/venv_py312_backup/
 # Python virtual environment backup
 /venv_py312_backup/
+# Per-job uploaded datasets and generated artifacts
+/jobs/
