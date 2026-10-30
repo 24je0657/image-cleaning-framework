@@ -8,8 +8,8 @@ from fastapi                 import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes   import health, upload, jobs, results
-from api.worker   import executor, shutdown
 from api.dependencies import get_resnet, get_autoencoder
+from api.worker import executor, shutdown, load_persisted_jobs
 
 app = FastAPI(
     title       = "Image Cleaning Framework API",
@@ -38,9 +38,22 @@ app.include_router(results.router)
 @app.on_event("startup")
 async def startup():
     print("Starting Image Cleaning API...")
-    loop = asyncio.get_event_loop()
+
+    loop = asyncio.get_running_loop()
+
+    # Recover persisted jobs before accepting requests.
+    restored = await loop.run_in_executor(
+        executor,
+        load_persisted_jobs,
+        True,
+    )
+
+    print(f"Restored {restored} persisted job(s)")
+
+    # Load models.
     await loop.run_in_executor(executor, get_resnet)
     await loop.run_in_executor(executor, get_autoencoder)
+
     print("API ready ✅  →  http://localhost:8000/docs")
 
 

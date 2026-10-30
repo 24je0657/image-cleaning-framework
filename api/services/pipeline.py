@@ -13,6 +13,7 @@ from api.services.quality_service import QualityService
 from api.services.outlier_service import OutlierService
 from api.services.mislabel_service import MislabelService
 from api.services.decision_engine import DecisionEngineService
+from api.worker import update_job
 
 
 class PipelineService:
@@ -38,22 +39,32 @@ class PipelineService:
     def run(self, job_id: str, jobs: dict, split: str):
         """
         Full pipeline. Called inside ThreadPoolExecutor.
-        Updates jobs[job_id] at every stage.
+        Updates persistent job state at every stage.
         """
         start = time.time()
-
-        jobs[job_id]["status"] = "running"
         module_results = []
 
         def update(pct: int, msg: str):
-            jobs[job_id]["progress"] = pct
-            jobs[job_id]["message"] = msg
+            update_job(
+                job_id,
+                progress=pct,
+                message=msg
+            )
 
         def record(result: dict):
             module_results.append(result)
 
         try:
-            # ── Embeddings
+            # Initial job status
+            update_job(
+                job_id,
+                status="running",
+                progress=0,
+                message="Pipeline started",
+                error=None
+            )
+
+            # Embeddings
             update(10, "Extracting ResNet50 embeddings...")
 
             from src.embeddings import extract_embeddings, load_embeddings
@@ -61,7 +72,7 @@ class PipelineService:
             extract_embeddings(split)
             embeddings, labels, paths = load_embeddings(split)
 
-            # ── Duplicates
+            # Duplicates
             if self.config.get("run_duplicates", True):
                 update(25, "Detecting duplicates...")
 
@@ -76,7 +87,7 @@ class PipelineService:
                     )
                 )
 
-            # ── Blur
+            # Blur
             if self.config.get("run_blur", True):
                 update(42, "Detecting blur...")
 
@@ -84,7 +95,7 @@ class PipelineService:
                     self.qual_svc.detect_blur_batch(paths)
                 )
 
-            # ── Noise
+            # Noise
             if self.config.get("run_noise", True):
                 update(55, "Detecting noise...")
 
@@ -92,7 +103,7 @@ class PipelineService:
                     self.qual_svc.detect_noise_batch(paths)
                 )
 
-            # ── Outliers
+            # Outliers
             if self.config.get("run_outliers", True):
                 update(68, "Running Isolation Forest...")
 
@@ -104,7 +115,7 @@ class PipelineService:
                     )
                 )
 
-            # ── Mislabels
+            # Mislabels
             if self.config.get("run_mislabels", True):
                 update(82, "Detecting mislabeled images...")
 
@@ -116,25 +127,30 @@ class PipelineService:
                     )
                 )
 
-            # ── Decision Engine
+            # Decision Engine
             update(94, "Building master report...")
 
             summary = self.de_svc.merge_reports(split)
 
-            jobs[job_id].update({
-                "status": "completed",
-                "progress": 100,
-                "message": "Pipeline complete ✅",
-                "result": {
+            # Mark job as completed
+            update_job(
+                job_id,
+                status="completed",
+                progress=100,
+                message="Pipeline complete",
+                result={
                     **summary,
                     "modules": module_results,
-                    "duration_s": round(time.time() - start, 2),
+                    "duration_s": round(time.time() - start, 2)
                 },
-            })
+                error=None
+            )
 
         except Exception as e:
-            jobs[job_id].update({
-                "status": "failed",
-                "message": f"Pipeline failed: {e}",
-                "error": str(e),
-            })
+            # Mark job as failed
+            update_job(
+                job_id,
+                status="failed",
+                message=f"Pipeline failed: {e}",
+                error=str(e)
+            )

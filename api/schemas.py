@@ -11,6 +11,7 @@ class JobStatus(str, Enum):
     RUNNING   = "running"
     COMPLETED = "completed"
     FAILED    = "failed"
+    INTERRUPTED = "interrupted"
 
 
 class SplitType(str, Enum):
