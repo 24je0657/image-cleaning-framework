@@ -317,7 +317,7 @@ def run_pipeline(
     from src.decision_engine import build_master_report
     df_master, ok = run_step(
         f"Step 9 — Decision Engine ({label})",
-        build_master_report, split,reports_dir=str(cfg.reports_dir)
+        build_master_report, split,reports_dir=str(cfg.reports_dir),embed_dir=str(cfg.embeddings_dir),
     )
     summary["steps"]["decision_engine"] = ok
 

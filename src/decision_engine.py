@@ -32,222 +32,473 @@ os.makedirs(REPORTS_DIR, exist_ok = True)
 # ----- Loaders -----
 
 def load_report(path, required_cols):
+    """Load a detector CSV safely; return None if unusable."""
 
-    """ Load a CSV Report safely - return None if missing"""
     if not os.path.exists(path):
-        print(f" Missing file :{path}")
+        print(f"Missing file: {path}")
         return None
-    
-    df = pd.read_csv(path)
+
+    try:
+        df = pd.read_csv(path)
+    except (pd.errors.EmptyDataError, pd.errors.ParserError, OSError) as exc:
+        print(f"Unable to read report {path}: {exc}")
+        return None
+
     missing = [
-        c 
-        for c in required_cols
-        if c not in df.columns
+        column
+        for column in required_cols
+        if column not in df.columns
     ]
-    if missing :
-        print(f" {path} missing columns : {missing}")
+
+    if missing:
+        print(f"{path} missing columns: {missing}")
         return None
-    
+
+    if df.empty:
+        print(f"Report contains no rows: {path}")
+        return None
+
+    if df["file_path"].isna().all():
+        print(f"Report contains no usable file paths: {path}")
+        return None
+
     return df
 
+
 # ----- Main Merge Function -----
+def build_master_report(
+    split="train",
+    reports_dir=REPORTS_DIR,
+    embed_dir=None,
+):
+    """
+    Merge available detector reports into one master report.
 
-def build_master_report(split = "train",reports_dir=REPORTS_DIR):
-
-    print(f"\n{'='*30}")
+    Image inventory priority:
+      1. Embedding file_paths.npy
+      2. Union of available detector reports
+      3. Raise an error if no inventory is available
+    """
+    print(f"\n{'=' * 30}")
     print(f"DECISION ENGINE -- {split.upper()} SET")
-    print(f"{'='*30}")
+    print(f"{'=' * 30}")
 
-    dup_df   = load_report(
+    # ----- Load detector reports -----
+    dup_df = load_report(
         f"{reports_dir}/{split}_duplicates_report.csv",
-        ["file_path", "Exact_duplicates", "near_duplicate","dup_confidence"]
+        ["file_path", "Exact_duplicates", "near_duplicate", "dup_confidence"],
     )
-    blur_df  = load_report(
+
+    blur_df = load_report(
         f"{reports_dir}/{split}_blur_report.csv",
-        ["file_path","class", "blur_score", "threshold_used", "is_blurry"]
+        ["file_path", "class", "blur_score", "threshold_used", "is_blurry"],
     )
+
     noise_df = load_report(
         f"{reports_dir}/{split}_noise_report.csv",
-        ["file_path", "is_noisy","is_noisy_refined","reconstruction_error","noise_verdict"]
+        [
+            "file_path",
+            "is_noisy",
+            "is_noisy_refined",
+            "reconstruction_error",
+            "noise_verdict",
+        ],
     )
-    out_df   = load_report(
+
+    out_df = load_report(
         f"{reports_dir}/{split}_outlier_report.csv",
-        ["file_path", "is_outlier"]
+        ["file_path", "is_outlier"],
     )
-    mis_df   = load_report(
+
+    mis_df = load_report(
         f"{reports_dir}/{split}_mislabel_report.csv",
-        ["file_path", "is_mislabeled", "confidence", "declared_class"]
+        ["file_path", "is_mislabeled", "confidence", "declared_class"],
     )
-    # Use blur report as base .. since contains every image
-    master = blur_df[["file_path","class", "blur_score", "threshold_used", "is_blurry"]].copy()
 
-    # ----- Merge Duplicates -----
-    if dup_df is not None :
-        master = master.merge(
-            dup_df[["file_path", "Exact_duplicates",
-                    "near_duplicate", "duplicate_of",
-                    "cosine_score","dup_confidence"]],
-            on="file_path", how="left"
+    # ----- Record which detector reports are available -----
+    modules_available = {
+        "duplicates": dup_df is not None,
+        "blur": blur_df is not None,
+        "noise": noise_df is not None,
+        "outliers": out_df is not None,
+        "mislabels": mis_df is not None,
+    }
+
+    print(
+        "  Available detector reports:",
+        [name for name, available in modules_available.items() if available],
+    )
+
+    unavailable = [
+        name for name, available in modules_available.items() if not available
+    ]
+
+    if unavailable:
+        print("  Missing detector reports:", unavailable)
+
+    # ----- Build image inventory -----
+    all_paths = []
+    all_classes = {}
+
+    if embed_dir is not None:
+        paths_file = Path(embed_dir) / f"{split}_file_paths.npy"
+        labels_file = Path(embed_dir) / f"{split}_labels.npy"
+
+        if paths_file.exists():
+            paths = np.load(paths_file, allow_pickle=True).tolist()
+
+            if len(paths) != len(set(paths)):
+                raise ValueError(
+                    f"Duplicate image paths found in {paths_file}"
+                )
+
+            all_paths = paths
+
+            if labels_file.exists():
+                labels = np.load(
+                    labels_file,
+                    allow_pickle=True,
+                ).tolist()
+
+                if len(paths) != len(labels):
+                    raise ValueError(
+                        f"Path/label count mismatch: "
+                        f"{len(paths)} paths and {len(labels)} labels "
+                        f"in {embed_dir}"
+                    )
+
+                all_classes = dict(zip(paths, labels))
+
+            print(
+                f"  Image inventory: {len(all_paths)} paths "
+                f"(embedding inventory)"
+            )
+
+    # Fallback: union of paths from available detector reports.
+    if not all_paths:
+        path_set = set()
+
+        for report_df in (
+            dup_df,
+            blur_df,
+            noise_df,
+            out_df,
+            mis_df,
+        ):
+            if report_df is None:
+                continue
+
+            path_set.update(report_df["file_path"].dropna().tolist())
+
+            if "class" in report_df.columns:
+                all_classes.update(
+                    dict(
+                        zip(
+                            report_df["file_path"],
+                            report_df["class"],
+                        )
+                    )
+                )
+
+        all_paths = sorted(path_set)
+
+        if all_paths:
+            print(
+                f"  Image inventory: {len(all_paths)} paths "
+                "(report union; inventory may be incomplete)"
+            )
+        else:
+            raise RuntimeError(
+                "Cannot build master report: no image inventory "
+                "or usable detector report paths were found."
+            )
+    # ----- Create the master DataFrame -----
+    # Derive class names from the parent directory containing each image.
+    # Example: data/raw/Animal/train/cat/cat1.jpg -> cat
+
+    def get_class_from_path(file_path):
+        path_parts = Path(str(file_path)).parts
+
+        if len(path_parts) >= 2:
+            return path_parts[-2]
+
+        return ""
+
+    master = pd.DataFrame(
+        {
+            "file_path": all_paths,
+            "class": [
+                get_class_from_path(path) or all_classes.get(path, "")
+                for path in all_paths
+            ],
+        }
+    )
+
+    # ----- Merge detector reports -----
+    # Missing detector results remain unknown (NaN), not False.
+    # Internal _ran columns record whether each detector evaluated
+    # the particular image.
+
+    detector_reports = {
+        "duplicates": dup_df,
+        "blur": blur_df,
+        "noise": noise_df,
+        "outliers": out_df,
+        "mislabels": mis_df,
+    }
+
+    for detector_name, report_df in detector_reports.items():
+        master[f"_{detector_name}_ran"] = False
+
+        if report_df is not None:
+            reported_paths = set(
+                report_df["file_path"].dropna().tolist()
+            )
+
+            master[f"_{detector_name}_ran"] = (
+                master["file_path"].isin(reported_paths)
+            )
+
+    # Duplicates
+    if dup_df is not None:
+        dup_cols = [
+            "file_path",
+            "Exact_duplicates",
+            "near_duplicate",
+            "dup_confidence",
+        ]
+
+        optional_dup_cols = [
+            "duplicate_of",
+            "cosine_score",
+            "near_duplicate_of",
+        ]
+
+        dup_cols.extend(
+            col for col in optional_dup_cols
+            if col in dup_df.columns
         )
-    else:
-        master["Exact_duplicates"] = False
-        master["near_duplicate"]  = False
-        master["duplicate_of"]    = np.nan
-        master["cosine_score"]    = np.nan
-        master["dup_confidence"]  = ""
 
-    master["Exact_duplicates"] = master["Exact_duplicates"].fillna(False)
-    master["near_duplicate"]  = master["near_duplicate"].fillna(False)
-    master["dup_confidence"] = (
-        master["dup_confidence"].fillna("")
-    )
+        master = master.merge(
+            dup_df[dup_cols].drop_duplicates("file_path"),
+            on="file_path",
+            how="left",
+            validate="one_to_one",
+        )
 
+    # Blur
+    if blur_df is not None:
+        blur_cols = [
+            "file_path",
+            "class",
+            "blur_score",
+            "threshold_used",
+            "is_blurry",
+        ]
 
-    # ----- Merge Noise -----
+        blur_merge = blur_df[blur_cols].drop_duplicates("file_path")
+
+        master = master.merge(
+            blur_merge,
+            on="file_path",
+            how="left",
+            suffixes=("", "_blur"),
+            validate="one_to_one",
+        )
+
+        if "class_blur" in master.columns:
+            master["class"] = master["class"].where(
+                master["class"].astype(str).str.len() > 0,
+                master["class_blur"],
+            )
+            master.drop(columns=["class_blur"], inplace=True)
+
+    # Noise
     if noise_df is not None:
+        noise_cols = [
+            "file_path",
+            "is_noisy",
+            "is_noisy_refined",
+            "reconstruction_error",
+            "noise_verdict",
+        ]
+
         master = master.merge(
-            noise_df[["file_path", "is_noisy", "is_noisy_refined","reconstruction_error","noise_verdict"]],
-            on="file_path", how="left"
+            noise_df[noise_cols].drop_duplicates("file_path"),
+            on="file_path",
+            how="left",
+            validate="one_to_one",
         )
-    else:
-        master["is_noisy"]              = False
-        master["is_noisy_refined"]       = False
-        master["reconstruction_error"]  = np.nan
-        master["noise_verdict"] = "not_flagged"
 
-    master["is_noisy"] = master["is_noisy"].fillna(False)
-    master["is_noisy_refined"] = master["is_noisy_refined"].fillna(False)
-    master["noise_verdict"] = (
-        master["noise_verdict"].fillna("not_flagged")
-    )
-
-    # ----- Merge Outliers -----
+    # Outliers
     if out_df is not None:
-        master = master.merge(
-            out_df[["file_path", "is_outlier",
-                    "global_score", "per_class_outlier"]],
-            on="file_path", how="left"
+        out_cols = ["file_path", "is_outlier"]
+
+        optional_out_cols = [
+            "global_score",
+            "per_class_outlier",
+        ]
+
+        out_cols.extend(
+            col for col in optional_out_cols
+            if col in out_df.columns
         )
-    else:
-        master["is_outlier"]        = False
-        master["global_score"]      = np.nan
-        master["per_class_outlier"] = False
 
-    master["is_outlier"] = master["is_outlier"].fillna(False)
+        master = master.merge(
+            out_df[out_cols].drop_duplicates("file_path"),
+            on="file_path",
+            how="left",
+            validate="one_to_one",
+        )
 
-    # ----- Merge Mislabels -----
+    # Mislabels
     if mis_df is not None:
-        master = master.merge(
-            mis_df[["file_path", "is_mislabeled", "confidence",
-                    "nn_predicted", "votes"]],
-            on="file_path", how="left"
-        )
-        master = master.rename(columns={
-            "confidence" : "mislabel_confidence",
-            "votes"      : "mislabel_votes"
-        })
-    else:
-        master["is_mislabeled"]       = False
-        master["mislabel_confidence"] = "CLEAN"
-        master["nn_predicted"]        = np.nan
-        master["mislabel_votes"]      = 0
+        mis_cols = [
+            "file_path",
+            "is_mislabeled",
+            "confidence",
+            "declared_class",
+        ]
 
-    master["is_mislabeled"] = master["is_mislabeled"].fillna(False)
+        optional_mis_cols = [
+            "nn_predicted",
+            "votes",
+        ]
+
+        mis_cols.extend(
+            col for col in optional_mis_cols
+            if col in mis_df.columns
+        )
+
+        master = master.merge(
+            mis_df[mis_cols].drop_duplicates("file_path"),
+            on="file_path",
+            how="left",
+            validate="one_to_one",
+        )
+
+        master.rename(
+            columns={
+                "confidence": "mislabel_confidence",
+                "votes": "mislabel_votes",
+            },
+            inplace=True,
+        )
+
+    # Ensure downstream scoring and reporting columns exist.
+    # Keep unknown detector flags as NaN until verdict assignment.
+    required_detector_columns = {
+        "Exact_duplicates": np.nan,
+        "near_duplicate": np.nan,
+        "dup_confidence": np.nan,
+        "is_blurry": np.nan,
+        "blur_score": np.nan,
+        "threshold_used": np.nan,
+        "is_noisy": np.nan,
+        "is_noisy_refined": np.nan,
+        "reconstruction_error": np.nan,
+        "noise_verdict": np.nan,
+        "is_outlier": np.nan,
+        "global_score": np.nan,
+        "per_class_outlier": np.nan,
+        "is_mislabeled": np.nan,
+        "mislabel_confidence": np.nan,
+        "declared_class": np.nan,
+        "nn_predicted": np.nan,
+        "mislabel_votes": np.nan,
+    }
+
+    for column, default_value in required_detector_columns.items():
+        if column not in master.columns:
+            master[column] = default_value
+
+
+
 
     # ----- Priority Score -----
 
+    def is_true(value) -> bool:
+        """Return True only for an actual true Boolean value."""
+        if pd.isna(value):
+            return False
+
+        if isinstance(value, str):
+            return value.strip().lower() in {"true", "1", "yes"}
+
+        return bool(value)
+
     def compute_priority_score(row: pd.Series) -> int:
         """
-        Confidence-adjusted priority scoring.
+        Calculate the existing confidence-adjusted priority score.
 
-        Exact duplicate       → 10
-        Near-dup DEFINITE     → 10
-        Near-dup LIKELY       → 7
-        Near-dup POSSIBLE     → 4
-        Mislabel HIGH         → 9
-        Mislabel MEDIUM       → 6
-        Mislabel LOW          → 3
-        Blurry severe (<20)   → 8
-        Blurry moderate       → 5
-        Confirmed noise       → 6
-        Ambiguous noise/OOD   → 3
-        Downgraded OOD        → 0
-        Outlier               → 4
+        Missing detector results contribute zero to the score.
+        Detector coverage is checked separately before assigning CLEAN.
         """
 
         score = 0
 
-        # ----- Exact duplicate -----
-        if row.get("Exact_duplicates", False):
+        # Exact duplicate
+        if is_true(row.get("Exact_duplicates")):
             score += 10
 
-        # ----- Near duplicate -----
-        if row.get("near_duplicate", False):
+        # Near duplicate
+        if is_true(row.get("near_duplicate")):
+            dup_conf = row.get("dup_confidence")
 
-            dup_conf = row.get("dup_confidence", "LIKELY")
+            if pd.isna(dup_conf):
+                dup_conf = "LIKELY"
 
             score += {
                 "DEFINITE": 10,
                 "LIKELY": 7,
-                "POSSIBLE": 4
-            }.get(dup_conf, 7)
+                "POSSIBLE": 4,
+            }.get(str(dup_conf).upper(), 7)
 
-        # ----- Mislabel -----
-        if row.get("is_mislabeled", False):
+        # Mislabel
+        if is_true(row.get("is_mislabeled")):
+            mis_conf = row.get("mislabel_confidence")
 
-            mis_conf = row.get(
-                "mislabel_confidence",
-                "MEDIUM"
-            )
+            if pd.isna(mis_conf):
+                mis_conf = "MEDIUM"
 
             score += {
                 "HIGH": 9,
                 "MEDIUM": 6,
-                "LOW": 3
-            }.get(mis_conf, 6)
+                "LOW": 3,
+            }.get(str(mis_conf).upper(), 6)
 
-        # ----- Blur -----
-        if row.get("is_blurry", False):
+        # Blur
+        if is_true(row.get("is_blurry")):
+            blur_score = row.get("blur_score")
 
-            blur = row.get("blur_score", 50)
-
-            if blur < 20:
+            if pd.isna(blur_score):
+                score += 5
+            elif blur_score < 20:
                 score += 8
             else:
                 score += 5
 
-        # ----- Noise -----
-        if row.get("is_noisy_refined", False):
+        # Noise
+        if is_true(row.get("is_noisy_refined")):
+            noise_verdict = row.get("noise_verdict")
 
-            noise_verdict = row.get(
-                "noise_verdict",
-                ""
-            )
+            if pd.isna(noise_verdict):
+                noise_verdict = ""
 
-            if noise_verdict == "confirmed_noisy":
-                score += 6
+            score += {
+                "confirmed_noisy": 6,
+                "review_ood_or_noise": 3,
+                "review_noise": 3,
+                "review_possible_ood": 0,
+                "downgraded_ood": 0,
+            }.get(str(noise_verdict), 3)
 
-            elif noise_verdict == "review_ood_or_noise":
-                score += 3
-
-            elif noise_verdict == "review_noise":
-                score += 3
-
-            elif noise_verdict == "review_possible_ood":
-                score += 0
-
-            elif noise_verdict == "downgraded_ood":
-                score += 0
-
-            else:
-                # Conservative fallback
-                score += 3
-
-        # ----- Outlier -----
-        if row.get("is_outlier", False):
+        # Outlier
+        if is_true(row.get("is_outlier")):
             score += 4
 
         return score
+
 
 
     # Apply confidence-adjusted priority score
@@ -257,72 +508,88 @@ def build_master_report(split = "train",reports_dir=REPORTS_DIR):
     )
 
 
+
     # ----- Final Verdict -----
 
     def assign_verdict(row):
-        # Downgraded OOD is not clean — it needs review
+        # Determine whether all five detectors evaluated this image.
+        all_detectors_ran = all(
+            is_true(row.get(column, False))
+            for column in [
+                "_duplicates_ran",
+                "_blur_ran",
+                "_noise_ran",
+                "_outliers_ran",
+                "_mislabels_ran",
+            ]
+        )
+
+        # Preserve existing issue-specific verdicts even if
+        # another detector did not evaluate the image.
         if row.get("noise_verdict") == "downgraded_ood":
             return "REVIEW — possible OOD"
 
-        # No detected issue
-        if row["priority_score"] == 0:
-            return "CLEAN"
-
         # Exact duplicate
-        elif row["Exact_duplicates"]:
+        if is_true(row.get("Exact_duplicates")):
             return "REMOVE — duplicate"
 
         # Definite near duplicate
-        elif (
-            row["near_duplicate"]
+        if (
+            is_true(row.get("near_duplicate"))
             and row.get("dup_confidence") == "DEFINITE"
         ):
             return "REMOVE — near duplicate"
 
         # High-confidence mislabel
-        elif (
-            row["is_mislabeled"]
-            and row["mislabel_confidence"] == "HIGH"
+        if (
+            is_true(row.get("is_mislabeled"))
+            and row.get("mislabel_confidence") == "HIGH"
         ):
             return "REMOVE — mislabeled"
 
         # Severe blur
-        elif (
-            row["is_blurry"]
-            and row["blur_score"] < BLUR_REMOVE_THRESHOLD
+        blur_score = row.get("blur_score")
+        if (
+            is_true(row.get("is_blurry"))
+            and pd.notna(blur_score)
+            and blur_score < BLUR_REMOVE_THRESHOLD
         ):
             return "REMOVE — blurry"
 
         # Confirmed noise
-        elif row.get("noise_verdict") == "confirmed_noisy":
+        if row.get("noise_verdict") == "confirmed_noisy":
             return "REMOVE — noisy"
 
         # High overall priority
-        elif row["priority_score"] >= REMOVE_PRIORITY:
+        if row["priority_score"] >= REMOVE_PRIORITY:
             return "REMOVE — high priority"
 
         # Ambiguous noise / OOD
-        elif row.get("noise_verdict") == "review_ood_or_noise":
+        if row.get("noise_verdict") == "review_ood_or_noise":
             return "REVIEW — OOD or noise"
 
         # Possible noise
-        elif row.get("noise_verdict") == "review_noise":
+        if row.get("noise_verdict") == "review_noise":
             return "REVIEW — possible noise"
 
         # Possible OOD
-        elif row.get("noise_verdict") in [
-            "review_possible_ood",
-            "downgraded_ood"
-        ]:
+        if row.get("noise_verdict") == "review_possible_ood":
             return "REVIEW — possible OOD"
 
+        # Incomplete analysis must never be labelled CLEAN.
+        if not all_detectors_ran:
+            return "REVIEW — incomplete analysis"
+
+        # Only fully analysed images with no detected issues are CLEAN.
+        if row["priority_score"] == 0:
+            return "CLEAN"
+
         # Medium priority
-        elif row["priority_score"] >= REVIEW_PRIORITY:
+        if row["priority_score"] >= REVIEW_PRIORITY:
             return "REVIEW — medium priority"
 
         # Low priority
-        else:
-            return "REVIEW — low priority"
+        return "REVIEW — low priority"
 
 
     master["verdict"] = master.apply(
@@ -342,7 +609,8 @@ def build_master_report(split = "train",reports_dir=REPORTS_DIR):
 
     master["total_flags"] = (
         master[flag_cols]
-        .astype(bool)
+        .fillna(False)
+        .map(is_true)
         .sum(axis=1)
     )
 
@@ -362,7 +630,7 @@ def build_master_report(split = "train",reports_dir=REPORTS_DIR):
 
         if col in master.columns:
  
-            count = master[col].astype(bool).sum()
+            count = master[col].fillna(False).map(is_true).sum()
             pct = 100 * count / len(master)
   
             print(
@@ -463,7 +731,16 @@ def build_master_report(split = "train",reports_dir=REPORTS_DIR):
         reports_path/f"{split}_master_report.csv"
     )
 
-    master.to_csv(
+    # Exclude internal detector-coverage columns from the exported report
+
+    internal_columns = [
+        column
+        for column in master.columns
+        if column.startswith("_")
+    ]
+    output_master = master.drop(columns=internal_columns)
+
+    output_master.to_csv(
         master_path,
         index=False
     )
@@ -499,37 +776,37 @@ def build_master_report(split = "train",reports_dir=REPORTS_DIR):
 
         "exact_dup": (
             master["Exact_duplicates"]
-            .astype(bool)
+            .map(is_true)
             .sum()
         ),
 
         "near_dup": (
             master["near_duplicate"]
-            .astype(bool)
+            .map(is_true)
             .sum()
         ),
 
         "blurry": (
             master["is_blurry"]
-            .astype(bool)
+            .map(is_true)
             .sum()
         ),
 
         "noisy": (
             master["is_noisy_refined"]
-            .astype(bool)
+            .map(is_true)
             .sum()
         ),
 
         "outlier": (
             master["is_outlier"]
-            .astype(bool)
+            .map(is_true)
             .sum()
         ),
 
         "mislabeled": (
             master["is_mislabeled"]
-            .astype(bool)
+            .map(is_true)
             .sum()
         )
     }
@@ -550,7 +827,7 @@ def build_master_report(split = "train",reports_dir=REPORTS_DIR):
         f"Summary saved ==> {summary_path}"
     )
 
-    return master
+    return output_master
 
 if __name__ == "__main__" :
    for split in ["train", "val"]:
