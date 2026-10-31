@@ -7,11 +7,12 @@ from datetime   import datetime
 # ─── ENUMS ────────────────────────────────────────────────────────────────────
 
 class JobStatus(str, Enum):
-    PENDING   = "pending"
-    RUNNING   = "running"
-    COMPLETED = "completed"
-    FAILED    = "failed"
+    PENDING     = "pending"
+    RUNNING     = "running"
+    COMPLETED   = "completed"
+    FAILED      = "failed"
     INTERRUPTED = "interrupted"
+    READY       = "ready"   # dataset validated and extracted, awaiting a run
 
 
 class SplitType(str, Enum):

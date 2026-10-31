@@ -7,6 +7,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
+# Folder names recognised as dataset splits (compared case-insensitively).
+KNOWN_SPLITS = frozenset({"train", "val", "test", "training", "validation"})
 
 @dataclass
 class PipelineConfig:
@@ -83,8 +85,6 @@ class PipelineConfig:
 
         # Detect layout: does data_dir contain class folders directly
         # or split folders (train/val/test)?
-        KNOWN_SPLITS = {"train", "val", "test",
-                        "training", "validation"}
         split_dirs   = [d for d in subdirs
                         if d.name.lower() in KNOWN_SPLITS]
 
