@@ -256,6 +256,21 @@ def test_compression_bomb() -> None:
            [("cat/a.jpg", b"\0" * 3_000_000)] + imgs("dog", 3),
            LIM, zipfile.ZIP_DEFLATED)
 
+def test_bzip2_compression_rejected() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = make_zip(
+            tmp,
+            imgs("cat", 3) + imgs("dog", 3),
+            compression=zipfile.ZIP_BZIP2,
+        )
+
+        expect(
+            uc.UnsupportedArchiveError,
+            du.inspect_zip,
+            path,
+            LIM,
+        )
+
 
 def test_entry_count_checked_before_opening() -> None:
     few = uc.UploadLimits(max_entries=5, max_images=5,
@@ -290,7 +305,12 @@ def test_end_of_central_directory_guards() -> None:
 
         # Our EOCD validator must locate the real EOCD,
         # even when the comment contains signature bytes.
-        du._check_central_directory(commented, LIM)
+        expect(
+            uc.UnsupportedArchiveError,
+            du.inspect_zip,
+            commented,
+            LIM,
+        )
 
         # Multi-disk ZIP archives must be rejected.
         multi_disk = Path(tmp) / "multi_disk.zip"
@@ -324,6 +344,57 @@ def test_end_of_central_directory_guards() -> None:
             LIM,
         )
 
+        # Malformed EOCD comment length must be rejected.
+        malformed_comment = Path(tmp) / "malformed_comment.zip"
+
+        malformed_comment.write_bytes(
+            struct.pack(
+                "<4s4H2LH",
+                b"PK\x05\x06",
+                0, 0, 0, 0, 0, 0, 10,
+            ) + b"short"
+        )
+
+        expect(
+            uc.UnsupportedArchiveError,
+            du.inspect_zip,
+            malformed_comment,
+            LIM,
+        )
+
+def _zip_with_comment(tmp, comment: bytes) -> Path:
+    path = Path(tmp) / "commented.zip"
+
+    with zipfile.ZipFile(path, "w") as zf:
+        for name, data in imgs("cat", 3) + imgs("dog", 3):
+            zf.writestr(name, data)
+
+        zf.comment = comment
+
+    return path
+
+
+def test_harmless_zip_comment_is_accepted() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = _zip_with_comment(tmp, b"made by tool")
+        plan = du.inspect_zip(path, LIM)
+
+        assert plan.total_images == 6
+
+
+def test_signature_inside_zip_comment_is_rejected() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = _zip_with_comment(
+            tmp,
+            b"note PK\x05\x06 " + b"A" * 30,
+        )
+
+        expect(
+            uc.UnsupportedArchiveError,
+            du.inspect_zip,
+            path,
+            LIM,
+        )
 
 def test_inspection_writes_nothing() -> None:
     with tempfile.TemporaryDirectory() as tmp:

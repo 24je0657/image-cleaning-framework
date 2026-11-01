@@ -55,7 +55,6 @@ SPLIT_ALIAS_GROUPS = (
 SUPPORTED_COMPRESSION = frozenset({
     zipfile.ZIP_STORED,
     zipfile.ZIP_DEFLATED,
-    zipfile.ZIP_BZIP2,
     zipfile.ZIP_LZMA,
 })
 
@@ -169,7 +168,10 @@ def _check_member(info: zipfile.ZipInfo) -> list:
     return _safe_parts(info.filename)
 
 
-def _check_central_directory(path: Path, limits: UploadLimits) -> None:
+def _check_central_directory(
+    path: Path,
+    limits: UploadLimits,
+) -> Optional[int]:
     """
     Validate the ZIP End of Central Directory (EOCD) record before
     zipfile loads the central directory into memory.
@@ -210,7 +212,18 @@ def _check_central_directory(path: Path, limits: UploadLimits) -> None:
         search_end = candidate
 
     if idx < 0:
+        if b"PK\x05\x06" in tail:
+            raise UnsupportedArchiveError(
+                "ZIP archive has an invalid end-of-central-directory record."
+            )
         return  # zipfile will report an invalid ZIP.
+
+    # Ensure our validator and CPython's zipfile parser
+    # identify the same EOCD record.
+    if tail.rfind(b"PK\x05\x06") != idx:
+        raise UnsupportedArchiveError(
+            "ZIP archive has an ambiguous end-of-central-directory record."
+        )
 
     (
         _signature,
@@ -270,6 +283,8 @@ def _check_central_directory(path: Path, limits: UploadLimits) -> None:
         raise UnsupportedArchiveError(
             "Invalid ZIP central-directory boundaries."
         )
+
+    return total_entries
 
 
 # ─── Wrapper detection ────────────────────────────────────────────────────────
@@ -588,7 +603,7 @@ def inspect_zip(
             f"Upload exceeds the {limits.max_upload_bytes // MB:,} MB limit.",
             details={"limit_mb": limits.max_upload_bytes // MB},
         )
-    _check_central_directory(path, limits)
+    expected_entries = _check_central_directory(path, limits)
 
     try:
         with zipfile.ZipFile(path) as zf:
@@ -597,5 +612,10 @@ def inspect_zip(
             ValueError, struct.error):
         raise UnsupportedArchiveError(
             "The uploaded file is not a valid ZIP archive.") from None
+
+    if expected_entries is not None and len(infos) != expected_entries:
+        raise UnsupportedArchiveError(
+            "ZIP directory is inconsistent with its end record."
+        )
 
     return _plan_from_infos(infos, limits)
