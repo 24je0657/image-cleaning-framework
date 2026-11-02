@@ -99,6 +99,18 @@ def run_step(name, fn, *args, **kwargs):
         traceback.print_exc()
         return None, False
 
+def enabled_modules_from_config(cfg) -> list:
+    """Return detector names enabled in the pipeline configuration."""
+
+    flags = (
+        ("duplicates", cfg.run_duplicates),
+        ("blur", cfg.run_blur),
+        ("noise", cfg.run_noise),
+        ("outliers", cfg.run_outliers),
+        ("mislabels", cfg.run_mislabels),
+    )
+
+    return [name for name, enabled in flags if enabled]
 
 # ─── EXPORT CLEAN IMAGES ──────────────────────────────────────────────────────
 
@@ -317,7 +329,8 @@ def run_pipeline(
     from src.decision_engine import build_master_report
     df_master, ok = run_step(
         f"Step 9 — Decision Engine ({label})",
-        build_master_report, split,reports_dir=str(cfg.reports_dir),embed_dir=str(cfg.embeddings_dir),
+        build_master_report, split,reports_dir=str(cfg.reports_dir),
+        embed_dir=str(cfg.embeddings_dir),enabled_modules=enabled_modules_from_config(cfg),
     )
     summary["steps"]["decision_engine"] = ok
 

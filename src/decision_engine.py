@@ -28,6 +28,39 @@ WEIGHTS ={
 }
 
 os.makedirs(REPORTS_DIR, exist_ok = True)
+DETECTOR_NAMES = (
+    "duplicates",
+    "blur",
+    "noise",
+    "outliers",
+    "mislabels",
+)
+
+
+def _resolve_enabled_modules(enabled_modules):
+    """None means all detectors are required; otherwise validate the names."""
+
+    if enabled_modules is None:
+        return frozenset(DETECTOR_NAMES)
+
+    if isinstance(enabled_modules, str):
+        raise TypeError(
+            "enabled_modules must be a list of names, not a string."
+        )
+
+    enabled = frozenset(enabled_modules)
+
+    unknown = enabled - set(DETECTOR_NAMES)
+
+    if unknown:
+        raise ValueError(
+            f"Unknown detector names: {sorted(unknown)}"
+        )
+
+    if not enabled:
+        raise ValueError("At least one detector must be enabled.")
+
+    return enabled
 
 # ----- Loaders -----
 
@@ -70,6 +103,7 @@ def build_master_report(
     split="train",
     reports_dir=REPORTS_DIR,
     embed_dir=None,
+    enabled_modules=None,
 ):
     """
     Merge available detector reports into one master report.
@@ -82,6 +116,16 @@ def build_master_report(
     print(f"\n{'=' * 30}")
     print(f"DECISION ENGINE -- {split.upper()} SET")
     print(f"{'=' * 30}")
+
+    enabled = _resolve_enabled_modules(enabled_modules)
+
+    required_ran_columns = [
+        f"_{name}_ran"
+        for name in DETECTOR_NAMES
+        if name in enabled
+    ]
+
+    print(f"  Detectors required for CLEAN: {sorted(enabled)}")
 
     # ----- Load detector reports -----
     dup_df = load_report(
@@ -515,13 +559,7 @@ def build_master_report(
         # Determine whether all five detectors evaluated this image.
         all_detectors_ran = all(
             is_true(row.get(column, False))
-            for column in [
-                "_duplicates_ran",
-                "_blur_ran",
-                "_noise_ran",
-                "_outliers_ran",
-                "_mislabels_ran",
-            ]
+            for column in required_ran_columns
         )
 
         # Preserve existing issue-specific verdicts even if
