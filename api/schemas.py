@@ -1,4 +1,4 @@
-from pydantic   import BaseModel, Field
+from pydantic   import BaseModel, ConfigDict, Field, model_validator
 from typing     import Optional, List, Dict, Any
 from enum       import Enum
 from datetime   import datetime
@@ -32,6 +32,24 @@ class PipelineRequest(BaseModel):
     blur_threshold: float         = Field(100.0, ge=0)
     cosine_threshold: float       = Field(0.97,  ge=0, le=1.0)
     contamination: float          = Field(0.05,  ge=0.01, le=0.5)
+
+class JobRunRequest(BaseModel):
+    """Options for running the pipeline on an uploaded job."""
+    model_config = ConfigDict(extra="forbid")   # typos fail loudly
+
+    run_duplicates: bool = True
+    run_blur: bool       = True
+    run_noise: bool      = True
+    run_outliers: bool   = True
+    run_mislabels: bool  = True
+    blur_percentile: int = Field(5, ge=1, le=25)
+
+    @model_validator(mode="after")
+    def _need_one_detector(self):
+        if not any((self.run_duplicates, self.run_blur, self.run_noise,
+                    self.run_outliers, self.run_mislabels)):
+            raise ValueError("Enable at least one detection module.")
+        return self
 
 
 class SingleImageRequest(BaseModel):
