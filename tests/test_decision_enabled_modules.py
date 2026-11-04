@@ -88,6 +88,7 @@ def frames():
             "votes": 0,
             "confidence": "CLEAN",
             "is_mislabeled": False,
+            "dbscan_checked": True,
         }),
     }
 
@@ -190,6 +191,26 @@ def test_invalid_enabled_modules_rejected():
     expect_exc((ValueError,), enabled_modules=["blurr"])
     expect_exc((TypeError,), enabled_modules="blur")
 
+def test_skipped_dbscan_blocks_clean():
+    def tweak(data):
+        data["mislabels"]["dbscan_checked"] = False
+
+    result = verdicts(tweak=tweak)
+
+    assert set(result.values()) == {"REVIEW — incomplete analysis"}
+
+def test_partial_dbscan_coverage_blocks_clean():
+    def tweak(data):
+        data["mislabels"].loc[data["mislabels"]["file_path"] == PATHS[0],"dbscan_checked"] = False
+
+    result = verdicts(tweak=tweak)
+
+    assert result[PATHS[0]] == "REVIEW — incomplete analysis"
+
+    assert all(
+        result[p] == "CLEAN"
+        for p in PATHS[1:]
+    )
 
 def run():
     tests = [

@@ -38,88 +38,63 @@ def load_embeddings(split = "train",embed_dir = EMBED_DIR):
     return embeddings, labels, paths
 
 def reduce_dimensions(embeddings):
+    if embeddings.shape[0] < 2:
+        raise ValueError("PCA requires at least 2 samples.")
+
+    n_components = min(
+        PCA_COMPONENTS,
+        embeddings.shape[0] - 1,
+        embeddings.shape[1],
+    )
+
     scaler = StandardScaler()
     scaled = scaler.fit_transform(embeddings)
-    pca = PCA(n_components=PCA_COMPONENTS, random_state=RANDOM_STATE)
+
+    pca = PCA(
+        n_components=n_components,
+        random_state=RANDOM_STATE,
+    )
     reduced = pca.fit_transform(scaled)
+
     explained = pca.explained_variance_ratio_.sum() * 100
 
-    print(f" PCA: {embeddings.shape[1]} -> {PCA_COMPONENTS} dims " 
-          f"explained variance: {explained:.2f}%")
+    print(
+        f" PCA: {embeddings.shape[1]} -> {n_components} dims "
+        f"explained variance: {explained:.2f}%"
+    )
 
     return reduced
 
 
 
 def method1_dbscan(reduced, labels):
-    """
-    Replace KMeans with DBSCAN for mislabel detection.
-
-    Why DBSCAN is better here:
-      - No K to tune
-      - Finds clusters of arbitrary shape
-      - Points that fit nowhere → label = -1
-      - Not forced to assign every point to a cluster
-
-    Strategy:
-      - Run DBSCAN separately for each class
-      - Points labelled -1 are density-based outliers
-      - These points are suspicious because their visual
-        embedding does not belong to a sufficiently dense
-        group within their claimed class
-    """
-
-    print("\n── Method 1: DBSCAN clustering ──────────────────")
-
-    from sklearn.preprocessing import normalize as sk_normalize
-
-    normed = sk_normalize(reduced, norm="l2")
-
+    normed = normalize(reduced, norm="l2")
     flags = np.zeros(len(labels), dtype=bool)
-    pred_cls = np.array(labels.copy())
+    pred_cls = labels.copy()
+    checked = np.zeros(len(labels), dtype=bool)
 
     for cls in np.unique(labels):
-
         mask = labels == cls
-
         cls_vecs = normed[mask]
         cls_idx = np.where(mask)[0]
+
+        # DBSCAN needs at least min_samples observations.
+        if len(cls_idx) < 10:
+            continue
 
         dbscan = DBSCAN(
             eps=0.5,
             min_samples=10,
             metric="cosine",
-            n_jobs=-1
+            n_jobs=-1,
         )
-
         cluster_ids = dbscan.fit_predict(cls_vecs)
 
-        # DBSCAN assigns -1 to density-based noise points.
-        # These images are suspicious within their claimed class.
+        checked[cls_idx] = True
         noise_mask = cluster_ids == -1
+        flags[cls_idx[noise_mask]] = True
 
-        n_noise = noise_mask.sum()
-        n_total = len(cluster_ids)
-
-        print(
-            f"  [{cls:10s}] {n_total} images → "
-            f"{n_noise} density outliers "
-            f"({100 * n_noise / n_total:.1f}%)"
-        )
-
-        for local_i, is_noise in enumerate(noise_mask):
-
-            if is_noise:
-
-                global_i = cls_idx[local_i]
-
-                flags[global_i] = True
-
-    print(
-        f"\n  DBSCAN suspects: {flags.sum()} images"
-    )
-
-    return flags, pred_cls
+    return flags, pred_cls, checked
 
 # ----- Nearest Neighbour Voting -----
 def method2_nearest_neighbors(reduced, labels):
@@ -130,8 +105,10 @@ def method2_nearest_neighbors(reduced, labels):
     print(f" \n Method 2 : Nearest Neighbor voting ---------")
     normed = normalize(reduced, norm = "l2")
 
+    n_neighbors = min(K_NEIGHBORS, len(reduced))
+
     nn  = NearestNeighbors(
-        n_neighbors = K_NEIGHBORS,
+        n_neighbors = n_neighbors,
         metric = "euclidean",
         n_jobs = -1
     )
@@ -241,7 +218,7 @@ def detect_mislabels(split = "train",embed_dir = EMBED_DIR, reports_dir = REPORT
     reduced = reduce_dimensions(embeddings)
 
     # ----- Run all Three methods -----
-    km_flag, km_pred = method1_dbscan(reduced, labels)
+    km_flag, km_pred, dbscan_checked = method1_dbscan(reduced, labels)
     nn_flag, nn_pred = method2_nearest_neighbors(reduced, labels)
     cd_flag, cd_pred = method3_centroid_distance(reduced, labels)
 
@@ -270,7 +247,8 @@ def detect_mislabels(split = "train",embed_dir = EMBED_DIR, reports_dir = REPORT
         "centroid_flag"      : cd_flag,
         "votes"              : votes,
         "confidence"         : confidence_arr,
-        "is_mislabeled"      : is_mislabeled
+        "is_mislabeled"      : is_mislabeled,
+        "dbscan_checked"     : dbscan_checked,
     })
 
     # ----- Overall Summary -----

@@ -295,13 +295,26 @@ def build_master_report(
         master[f"_{detector_name}_ran"] = False
 
         if report_df is not None:
-            reported_paths = set(
-                report_df["file_path"].dropna().tolist()
-            )
+            if detector_name == "mislabels":
+                # An image counts as evaluated only if DBSCAN actually ran.
+                if "dbscan_checked" in report_df.columns:
+                    checked = report_df["dbscan_checked"].fillna(False).astype(bool)
 
-            master[f"_{detector_name}_ran"] = (
-                master["file_path"].isin(reported_paths)
-            )
+                    checked_paths = set(
+                        report_df.loc[checked, "file_path"].dropna().tolist()
+                    )
+
+                    master["_mislabels_ran"] = (
+                        master["file_path"].isin(checked_paths)
+                    )
+            else:
+                reported_paths = set(
+                    report_df["file_path"].dropna().tolist()
+                )
+
+                master[f"_{detector_name}_ran"] = (
+                    master["file_path"].isin(reported_paths)
+                )
 
     # Duplicates
     if dup_df is not None:

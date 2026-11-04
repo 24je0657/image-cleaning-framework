@@ -33,20 +33,31 @@ def load_embeddings(split = "train",embed_dir=EMBED_DIR):
 
 
 # ----- PCA Dimensionality Reduction -----
-def Reduce_Dimensions(embeddings, n_components = PCA_COMPONENTS):
-    """Standardize => PCA
-    Returns Reduced Embeddings + fitted PCA object
-    """
-    print(f"Reducing dimensions {embeddings.shape[1]} => {n_components} using PCA...")
+def Reduce_Dimensions(embeddings, n_components=PCA_COMPONENTS):
+    if embeddings.shape[0] < 2:
+        raise ValueError("PCA requires at least 2 samples.")
+
+    n_components = min(
+        n_components,
+        embeddings.shape[0] - 1,
+        embeddings.shape[1],
+    )
 
     scaler = StandardScaler()
     scaled = scaler.fit_transform(embeddings)
-    pca = PCA(n_components=n_components, random_state=RANDOM_STATE)
+
+    pca = PCA(
+        n_components=n_components,
+        random_state=RANDOM_STATE,
+    )
     reduced = pca.fit_transform(scaled)
+
     explained = pca.explained_variance_ratio_.sum() * 100
 
-    print(f" Variance explained by {n_components} components: {explained:.2f}%")
-    print(f" Reduced embeddings shape: {reduced.shape}")
+    print(
+        f" PCA: {embeddings.shape[1]} -> {n_components} dims "
+        f"explained variance: {explained:.2f}%"
+    )
 
     return reduced, pca, scaler
 
@@ -87,7 +98,11 @@ def run_per_class_isolation_forest(embeddings, labels, paths, contamination = CO
         class_emb = embeddings[mask]
         class_paths = paths[mask]
 
-        n_comp = min(PCA_COMPONENTS, len(class_emb) - 1) # Ensure we don't exceed number of samples
+        n_comp = min(
+            PCA_COMPONENTS,
+            len(class_emb) - 1,
+            class_emb.shape[1],
+        ) # Ensure we don't exceed number of samples
         scaler = StandardScaler()
         scaled = scaler.fit_transform(class_emb)
         pca = PCA(n_components=n_comp, random_state=RANDOM_STATE)
@@ -122,8 +137,16 @@ def plot_outliers(reduced, predictions, labels, split = "train",reports_dir=REPO
 
     print("\n Generating Outlier Scatter Plot...")
 
-    pca_2d = PCA(n_components=2, random_state=RANDOM_STATE)
-    coords_2d = pca_2d.fit_transform(reduced)
+    if reduced.shape[1] >= 2:
+        pca = PCA(n_components=2, random_state=RANDOM_STATE)
+        coords_2d = pca.fit_transform(reduced)
+        x_label, y_label = "PCA1", "PCA2"
+    else:
+        coords_2d = np.column_stack((
+            reduced[:, 0],
+            np.zeros(len(reduced))
+    ))
+        x_label, y_label = "PCA1", "Zero"
     colors = {"cat":"blue", "dog":"orange", "elephant":"green",
               "horse":"purple", "lion":"brown"}
 
@@ -153,8 +176,8 @@ def plot_outliers(reduced, predictions, labels, split = "train",reports_dir=REPO
     )
 
     ax.set_title(f"Outlier Detection Scatter Plot ({split} set)")
-    ax.set_xlabel("PCA1")
-    ax.set_ylabel("PCA2")
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
     ax.legend(markerscale=2)
     plt.tight_layout()
 

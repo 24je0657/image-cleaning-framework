@@ -262,6 +262,9 @@ def run_pipeline(
                             df_n_dedup[col])
             else:
                 df_combined["near_duplicate"] = False
+                df_combined["cosine_score"] = np.nan
+                df_combined["near_duplicate_of"] = np.nan
+                df_combined["dup_confidence"] = np.nan
 
             out = cfg.report_path(split, "duplicates_report")
             df_combined.to_csv(out, index=False)
