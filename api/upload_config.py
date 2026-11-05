@@ -107,7 +107,7 @@ class UploadLimits:
     max_compression_ratio: float = 100.0
     min_classes: int = 2
     # PROVISIONAL: Step 5 sets this from a real run on a small dataset.
-    min_images_per_class: int = 10
+    min_images_per_class: int = 30
     max_image_pixels: int = 50_000_000
 
     def __post_init__(self):

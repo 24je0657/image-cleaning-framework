@@ -29,10 +29,14 @@ def test_defaults() -> None:
     assert lim.max_images == 5_000
     assert lim.max_compression_ratio == 100.0
     assert lim.min_classes == 2
-    assert lim.min_images_per_class == 10
+    assert lim.min_images_per_class == 30
     assert lim.max_image_pixels == 50_000_000
     assert isinstance(uc.LIMITS, uc.UploadLimits)
 
+def test_minimum_dataset_size_is_valid() -> None:
+    lim = uc.load_limits({})
+    assert lim.min_classes * lim.min_images_per_class == 60
+    assert lim.max_images >= 60
 
 def test_overrides_and_blank_values() -> None:
     lim = uc.load_limits({
