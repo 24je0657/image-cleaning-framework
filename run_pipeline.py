@@ -83,6 +83,8 @@ def parse_args():
 # ─── STEP RUNNER ──────────────────────────────────────────────────────────────
 
 def run_step(name, fn, *args, **kwargs):
+    tracker = _STEP_TRACKER.get()
+    step_id = tracker.begin(name) if tracker else None
     print(f"\n{'#'*60}")
     print(f"#  {name}")
     print(f"{'#'*60}")
@@ -91,13 +93,86 @@ def run_step(name, fn, *args, **kwargs):
         result  = fn(*args, **kwargs)
         elapsed = time.time() - t0
         print(f"\n✅  {name} — complete ({elapsed:.1f}s)")
+        if tracker:
+            tracker.end(step_id, True)
         return result, True
     except Exception as e:
         elapsed = time.time() - t0
         print(f"\n❌  {name} — FAILED ({elapsed:.1f}s): {e}")
         import traceback
         traceback.print_exc()
+        if tracker:
+            tracker.end(step_id, False)
         return None, False
+
+import contextvars
+import logging
+import re
+
+_logger = logging.getLogger(__name__)
+
+# Relative step cost, from logged Animal timings on CPU (approximate).
+STEP_WEIGHTS = {
+    "1": 1, "2": 1, "3": 82, "4": 7, "5": 1,
+    "6": 3, "6b": 1, "7": 1, "8": 1, "9": 1, "10": 1,
+}
+_STEP_ID = re.compile(r"^Step (\d+[a-z]?)\b")
+_STEP_TRACKER = contextvars.ContextVar("step_tracker", default=None)
+
+
+def planned_steps(cfg, skip_preprocessing: bool = False) -> list:
+    """Step ids that run_pipeline will execute for this configuration."""
+    ids = [] if skip_preprocessing else ["1", "2"]
+    ids.append("3")
+    if cfg.run_duplicates:
+        ids.append("4")
+    if cfg.run_blur:
+        ids.append("5")
+    if cfg.run_noise:
+        ids += ["6", "6b"]
+    if cfg.run_outliers:
+        ids.append("7")
+    if cfg.run_mislabels:
+        ids.append("8")
+    return ids + ["9", "10"]
+
+
+class StepTracker:
+    """Turns step start/end events into an overall 0..1 fraction."""
+
+    def __init__(self, planned, callback, split_index=0, n_splits=1):
+        self._weights = {s: STEP_WEIGHTS[s] for s in planned}
+        self._total = sum(self._weights.values())
+        self._done = set()
+        self._callback = callback
+        self._split_index = split_index
+        self._n_splits = max(1, n_splits)
+
+    def fraction(self) -> float:
+        done = sum(self._weights[s] for s in self._done)
+        return min(1.0, (self._split_index + done / self._total)
+                   / self._n_splits)
+
+    def _emit(self, message: str) -> None:
+        try:
+            self._callback(self.fraction(), message)
+        except Exception:  # noqa: BLE001 - progress must never break a run
+            _logger.warning("progress callback failed", exc_info=True)
+
+    def begin(self, name: str):
+        match = _STEP_ID.match(name)
+        self._emit(name)
+        return match.group(1) if match else None
+
+    def end(self, step_id, ok: bool) -> None:
+        if step_id in self._weights:
+            self._done.add(step_id)
+            self._emit(f"Step {step_id} completed")
+
+    def complete(self) -> None:
+        """Split finished: count steps that never ran (e.g. 6b after 6 failed)."""
+        self._done = set(self._weights)
+        self._emit("Split finished")
 
 def enabled_modules_from_config(cfg) -> list:
     """Return detector names enabled in the pipeline configuration."""
@@ -371,6 +446,7 @@ def run_pipeline_config(
     cfg: PipelineConfig,
     skip_embeddings: bool = False,
     skip_preprocessing: bool = False,
+    progress=None,
 ) -> dict:
     """
     Run the image-cleaning pipeline using an existing PipelineConfig.
@@ -409,19 +485,28 @@ def run_pipeline_config(
     summaries = {}
 
     # Process each split independently.
-    for split in splits:
-        label = split if split else "all"
+    for index, split in enumerate(cfg.splits):
+        tracker, token = None, None
 
-        print(f"\n\n{'=' * 60}")
-        print(f"    PROCESSING: {label.upper()}")
-        print(f"{'=' * 60}")
+        if progress is not None:
+            tracker = StepTracker(
+                planned_steps(cfg, skip_preprocessing),
+                progress, index, len(cfg.splits)
+            )
+            token = _STEP_TRACKER.set(tracker)
 
-        summaries[split] = run_pipeline(
-            cfg,
-            split,
-            skip_embeddings=skip_embeddings,
-            skip_preprocessing=skip_preprocessing,
-        )
+        try:
+            summaries[split] = run_pipeline(
+                cfg, split,
+                skip_embeddings=skip_embeddings,
+                skip_preprocessing=skip_preprocessing
+            )
+        finally:
+            if token is not None:
+                _STEP_TRACKER.reset(token)
+
+        if tracker is not None:
+            tracker.complete()
 
     # Overall success requires at least one processed split
     # and a successful result for every processed split.

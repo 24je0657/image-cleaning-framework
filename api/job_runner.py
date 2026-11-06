@@ -261,6 +261,17 @@ def _summarise_failures(result: dict) -> list[str]:
 
     return failures
 
+def _make_progress_callback(job_id: str):
+    """Map pipeline progress (0..1) onto the job's 5..95 range, never backwards."""
+    last = {"value": 5}
+
+    def callback(fraction: float, message: str) -> None:
+        value = max(last["value"], min(95, 5 + round(90 * fraction)))
+        last["value"] = value
+        update_job(job_id, progress=value, message=message)
+
+    return callback
+
 
 def run_job(job_id: str, cfg: PipelineConfig) -> None:
     """Execute the pipeline for a job and persist its final status."""
@@ -270,6 +281,7 @@ def run_job(job_id: str, cfg: PipelineConfig) -> None:
             cfg,
             skip_embeddings=False,
             skip_preprocessing=True,
+            progress=_make_progress_callback(job_id),
         )
 
         failures = _summarise_failures(result)
