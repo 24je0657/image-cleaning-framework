@@ -7,7 +7,7 @@ import asyncio
 from fastapi                 import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes   import health, upload, jobs, results, datasets, runs, job_results
+from api.routes   import health, upload, jobs, results, datasets, runs, job_results, job_downloads
 from api.dependencies import get_resnet, get_autoencoder
 from api.worker import executor, shutdown, load_persisted_jobs
 
@@ -35,6 +35,7 @@ app.include_router(results.router)
 app.include_router(datasets.router)
 app.include_router(runs.router)
 app.include_router(job_results.router)
+app.include_router(job_downloads.router)
 
 
 # ── Startup: pre-load models once ─────────────────────────────────────────────

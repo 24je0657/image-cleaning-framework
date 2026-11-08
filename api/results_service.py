@@ -24,6 +24,7 @@ import pandas as pd
 
 # Local
 from api.workspace import JobWorkspace
+from api.job_locks import job_lock
 
 logger = logging.getLogger(__name__)
 
@@ -342,8 +343,9 @@ def approve(ws: JobWorkspace, result: ResultSet, *, keep, remove,
                 "An approval is already being built for this job.")
         _BUILDING.add(ws.job_id)
     try:
-        return _build_final(ws, result, decisions, keep, remove,
-                            review_default, apply_proposed_removals)
+        with job_lock(ws.job_id):
+            return _build_final(ws, result, decisions, keep, remove,
+                                review_default, apply_proposed_removals)
     finally:
         with _BUILD_GUARD:
             _BUILDING.discard(ws.job_id)

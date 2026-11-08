@@ -218,6 +218,10 @@ def start_run(job_id: str, request: JobRunRequest) -> tuple:
             cfg = build_config(workspace, metadata, request)
             _reset_outputs(workspace)
 
+            workspace.download_zip.unlink(missing_ok=True)
+            (workspace.root / "download.stamp").unlink(missing_ok=True)
+            workspace.update_meta(run=request.model_dump(), approval=None)
+
             update_job(
                 job_id,
                 status="running",
