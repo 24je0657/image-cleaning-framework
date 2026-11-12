@@ -570,123 +570,55 @@ similar body proportions in certain photography angles.
 
 ## Classifier Experiment Results
 
-### Controlled Experiment Design
+Three training sets were compared with the same linear classifier
+(logistic regression on frozen ResNet50 embeddings) and evaluated on the
+unmodified validation set (1,497 images; one image = 0.067 percentage points).
 
-Three training datasets were compared using the same **Logistic Regression
-classifier on cached ResNet50 embeddings**, representing a linear
-classification head over a frozen ResNet50 feature extractor.
-
-All experiments were evaluated on the **original, unmodified validation
-set**.
-
-To assess the stability of the random baseline, Dataset A was evaluated
-across **5 random seeds** while Dataset B remained fixed.
-
-### Results
-
-| Dataset | N | Validation Accuracy |
+| Dataset | Images | Validation accuracy |
 |---|---:|---:|
-| A: Random subset (mean, 5 seeds) | 11,099 | **99.01% ± 0.10 pp** |
-| B: Clean subset (pipeline) | 11,099 | **98.06%** |
-| C: Full original | 13,474 | **99.00%** |
+| A: random subsets (mean of 5 draws) | 10,626 | 99.01% |
+| B: pipeline-clean (verdict CLEAN) | 10,626 | 97.93% |
+| C: full original | 13,474 | 99.00% |
 
-The clean subset was **0.95 percentage points below the mean random
-baseline** across the five tested seeds.
+B trails the random baseline by 1.08 percentage points on average
+(per-draw range −1.00 to −1.14). B is one fixed set, so the spread reflects
+only the random baseline.
 
-### Random Seed Stability
+**Note on B:** it keeps only CLEAN images, so it also drops every REVIEW
+image. The wizard keeps REVIEW images by default, so B is the strictest use
+of the pipeline.
 
-| Seed | A: Random | B: Clean | B − A |
-|---:|---:|---:|---:|
-| 42 | 99.00% | 98.06% | −0.94 pp |
-| 123 | 99.06% | 98.06% | −1.00 pp |
-| 999 | 99.13% | 98.06% | −1.07 pp |
-| 2024 | 98.86% | 98.06% | −0.80 pp |
-| 7 | 99.00% | 98.06% | −0.94 pp |
+**Default workflow (REMOVE verdicts only):** n = 12,847, accuracy = 99.00%,
+compared with a mean random-subset accuracy of 99.05% (difference = −0.05
+percentage points).
 
-The direction of the difference was consistent across all five tested
-random seeds.
+### Removing one signal at a time
 
-### Module-Level Attribution
-
-| Module Removed | N Remaining | Accuracy | Delta |
+| Removed | Images left | Accuracy | Δ vs full |
 |---|---:|---:|---:|
-| None (full) | 13,474 | 99.00% | — |
-| Duplicates only | 13,066 | 98.93% | −0.07 pp |
-| HIGH mislabels only | 13,454 | 98.93% | −0.07 pp |
-| Blur only | 12,798 | 99.06% | **+0.06 pp** |
-| Outliers only | 12,523 | 98.60% | **−0.40 pp** |
-| Full pipeline | 11,099 | 98.06% | **−0.94 pp** |
+| Nothing | 13,474 | 99.00% | |
+| Duplicates (exact or near) | 12,647 | 98.93% | −0.07 |
+| High-confidence mislabels | 13,454 | 98.93% | −0.07 |
+| Blur | 12,798 | 99.06% | +0.06 |
+| Outliers | 12,523 | 98.60% | −0.40 |
+| Everything not CLEAN | 10,626 | 97.93% | −1.07 |
 
-### Interpretation
+Rows overlap and are single runs, so they do not add up. Differences under
+about 0.1 percentage points are approximately one validation image and are
+not meaningful. Outlier removal is the only single signal with a visible
+cost. The likely cause is that Isolation Forest cannot distinguish a rare
+valid image from a bad one.
 
-**Blur removal (+0.06 pp)**
+### What this does and does not show
 
-Removing images flagged by the Laplacian-variance blur detector produced a
-small improvement in validation accuracy. This suggests that some of the
-detected low-quality images were not useful for this downstream
-classification task.
+The experiment shows that on this dataset, classifier and validation set,
+pipeline-cleaned data did not beat a random subset of the same size. It does
+not show that the cleaned data is worse on new data, because the validation
+set comes from the same distribution.
 
-**Duplicate removal (−0.07 pp)**
+Regenerate with:
 
-Removing duplicate images produced only a negligible change in accuracy.
-This suggests that the identified duplicates contributed little additional
-useful information to this classifier.
-
-**HIGH-confidence mislabel removal (−0.07 pp)**
-
-Removing the 20 HIGH-confidence suspected mislabels produced a negligible
-change in accuracy. Their contribution to downstream classification was
-small in this experiment.
-
-**Outlier removal (−0.40 pp)**
-
-Outlier removal produced the largest individual decrease among the
-evaluated modules. One possible explanation is that some statistically
-unusual images are nevertheless valid and informative examples,
-particularly difficult or boundary cases.
-
-Isolation Forest identifies unusual feature representations, but does not
-inherently distinguish **rare-but-valid samples** from **genuinely
-problematic samples**.
-
-### Key Nuance
-
-The **−0.94 percentage-point** decrease for the seed-42 experiment, and
-the approximately **−0.95 percentage-point mean difference** across the
-five tested seeds, do not by themselves establish that the cleaned dataset
-is intrinsically worse.
-
-They establish that, for this dataset, downstream classification task,
-validation set, and linear classifier, the pipeline-cleaned subset
-performed below the equal-sized random subsets tested.
-
-A different evaluation set or downstream task could produce a different
-result. In particular, the current validation set is drawn from the same
-dataset distribution, so this experiment does not establish whether
-cleaning improves generalization to genuinely external data.
-
-### What the Experiment Demonstrates
-
-1. **Blur removal** produced a small positive downstream effect.
-2. **Duplicate and HIGH-confidence mislabel removal** had negligible
-   downstream effects.
-3. **Outlier removal** produced the largest individual accuracy decrease
-   among the evaluated modules.
-4. The **full cleaning pipeline** performed approximately 0.95 percentage
-   points below the mean equal-sized random baseline across the five tested
-   seeds.
-5. The consistent direction across all five seeds indicates that the
-   observed difference was not reversed by the particular random subset
-   selected in these tests.
-6. Further tuning of the outlier criterion should consider the distinction
-   between **genuine anomalies** and **rare but valid training examples**.
-   
-### Key Dataset Findings
-
-- **Dog class** has the lowest natural sharpness baseline (blur threshold 65.8 vs elephant 747.8) — consistent with motion blur from fast-moving subjects.
-- **Noise refinement:** The Autoencoder initially flagged 635 training images and 54 validation images. After refinement, only 19 training images and 9 validation images were classified as refined noisy samples, while the majority of initial flags were categorized as possible OOD cases.
-- **Val/horse format anomaly:** 247/300 validation horse images were PNG while all other classes were JPG; the anomaly was detected and corrected automatically by the framework. Subsequent analysis showed that the format difference was not the root cause of the higher horse reconstruction-error distribution.
-- **Elephant class** has the highest mislabel rate (train 2.1%, val 9.0%) — consistent with visual similarity to lion in savanna backgrounds.
+python scripts/experiment_tables.py
 
 
 ## Interactive Streamlit Dashboard
@@ -728,6 +660,28 @@ Provides dataset cleaning efficiency, per-class issue statistics, module executi
 <p align="center">
   <img src="assets/dashboard_analytics.png" width="900">
 </p>
+
+## Upload Wizard (`cleaner_app.py`)
+
+Upload a ZIP of class folders or `train/val/test` folders of JPG or PNG
+images. The wizard validates the dataset, runs the selected checks, shows
+flagged images with reasons, and builds a cleaned dataset for your approval.
+
+Start the backend and frontend in separate terminals:
+
+```bash
+python run_api.py
+```
+
+```bash
+streamlit run cleaner_app.py --server.maxUploadSize 500
+```
+
+- Your upload is never modified; removals apply only to the copy you download.
+- Proposed removals are never applied unless you explicitly choose to apply them.
+- CLEAN means no issue was found by the checks you enabled.
+- Datasets need at least 30 images per class in each split.
+- **Not production-ready:** authentication, rate limiting and scheduled cleanup are not yet implemented.
 
 ## Quick Start
 
