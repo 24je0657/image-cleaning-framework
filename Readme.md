@@ -83,7 +83,7 @@ scene classification dataset.
 | Exact duplicates | 1 | 0.07% |
 | Near duplicates (unique images) | 11 | 0.73% |
 | Blurry images | 75 | 5.01% |
-| Outliers | 132 | 8.82% |
+| Outliers | 145 | 9.69% |
 | Mislabeled | 60 | 4.01% |
 
 
@@ -561,8 +561,8 @@ similar body proportions in certain photography angles.
 | Exact duplicates | 1 | 0.07% |
 | Near duplicates | 11 | 0.73% |
 | Blurry images | 75 | 5.01% |
+| Noisy images | 9 | 0.60% |
 | Outliers | 145 | 9.69% |
-| Outliers | 132 | 8.82% |
 | Mislabeled | 60 | 4.01% |
 | **To REMOVE** | **66** | **4.41%** |
 | **To REVIEW** | **210** | **14.03%** |
