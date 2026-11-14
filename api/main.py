@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.routes   import health, upload, jobs, results, datasets, runs, job_results, job_downloads
 from api.dependencies import get_resnet, get_autoencoder
 from api.worker import executor, shutdown, load_persisted_jobs
+from api import maintenance
 
 app = FastAPI(
     title       = "Image Cleaning Framework API",
@@ -53,6 +54,7 @@ async def startup():
     )
 
     print(f"Restored {restored} persisted job(s)")
+    maintenance.start_sweeper()
 
     # Load models.
     await loop.run_in_executor(executor, get_resnet)
@@ -64,4 +66,5 @@ async def startup():
 @app.on_event("shutdown")
 async def on_shutdown():
     shutdown()
+    maintenance.stop_sweeper()
     print("API shutdown complete")

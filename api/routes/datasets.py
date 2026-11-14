@@ -16,7 +16,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
 
 # Local
-from api import worker
+from api import maintenance, worker
 from api.dataset_service import discard_job, process_dataset
 from api.dataset_upload import inspect_zip
 from api.upload_config import (
@@ -152,6 +152,11 @@ async def upload_dataset(request: Request):
             return _error(exc.http_status, exc.to_dict())
 
     loop = asyncio.get_running_loop()
+
+    try:
+        maintenance.ensure_free_space(worker.JOBS_ROOT, limits)
+    except maintenance.StorageLowError as exc:
+        return _error(exc.http_status, exc.to_dict())
 
     # Create a persistent job and its isolated workspace.
     job = worker.create_persistent_job("Receiving upload")
