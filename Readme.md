@@ -59,8 +59,8 @@ scene classification dataset.
 
 | Split | Input | Clean | Remove | Review |
 |-------|------:|------:|-------:|-------:|
-| Train | 13,474 | 11,099 | 627 (4.65%) | 1,748 (12.97%) |
-| Val | 1,497 | 1,260 | 66 (4.41%) | 171 (11.42%) |
+| Train | 13,474 | 10,626 (78.9%) | 627 (4.7%) | 2,221 (16.5%) |
+| Val | 1,497 | 1,221 (81.6%) | 66 (4.4%) | 210 (14.0%) |
 | **Total** | **14,971** | **11,847** | **693** | **2,431** |
 
 *Reports: `reports/Animal/train_master_report.csv`, `reports/Animal/val_master_report.csv`*
