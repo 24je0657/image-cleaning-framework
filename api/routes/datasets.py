@@ -16,7 +16,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
 
 # Local
-from api import maintenance, worker
+from api import maintenance, worker, access
 from api.dataset_service import discard_job, process_dataset
 from api.dataset_upload import inspect_zip
 from api.upload_config import (
@@ -152,6 +152,10 @@ async def upload_dataset(request: Request):
             return _error(exc.http_status, exc.to_dict())
 
     loop = asyncio.get_running_loop()
+    try:
+        owner = access.enforce_upload_quota(request)
+    except access.QuotaExceededError as exc:
+        return _error(exc.http_status, exc.to_dict())
 
     try:
         maintenance.ensure_free_space(worker.JOBS_ROOT, limits)
@@ -164,6 +168,8 @@ async def upload_dataset(request: Request):
 
     try:
         workspace = get_workspace(job_id, worker.JOBS_ROOT)
+        if owner:
+            workspace.update_meta(owner=owner)
 
         worker.update_job(
             job_id,

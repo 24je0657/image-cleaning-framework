@@ -32,11 +32,14 @@ st.set_page_config(page_title="Clean your image dataset",
 
 
 @st.cache_resource
-def get_client() -> CleanerClient:
-    return CleanerClient()
+def get_client(access_code: str) -> CleanerClient:
+    return CleanerClient(access_code=access_code or None)
 
 
-client = get_client()
+with st.sidebar:
+    access_code = st.text_input("Access code", type="password",
+                                key="access_code")
+client = get_client(access_code)
 
 
 # ─── State ────────────────────────────────────────────────────────────────────
@@ -143,7 +146,7 @@ def render_configure(job: dict) -> None:
 
 
 @st.cache_data(ttl=900, max_entries=300, show_spinner=False)
-def fetch_image(job_id: str, path: str) -> bytes:
+def fetch_image(code: str, job_id: str, path: str) -> bytes:
     return client.image_bytes(job_id, path)
 
 
@@ -349,6 +352,14 @@ def main() -> None:
     with st.sidebar:
         st.header("Job")
         job_id = st.session_state.job_id
+        if job_id and st.button("Delete this job's data"):
+            try:
+                client.delete_job(job_id)
+            except ApiError as exc:
+                show_error(exc)
+            else:
+                start_over()
+                st.rerun()
         st.code(job_id or "none yet")
         st.button("Start over", on_click=start_over)
         st.caption(CHECKS_NOTE)
@@ -360,7 +371,9 @@ def main() -> None:
     try:
         job = client.job(job_id)
     except ApiError as exc:
-        if exc.status in (400, 404):
+        if exc.status == 401:
+            st.warning("Enter your access code in the sidebar.")
+        elif exc.status in (400, 404):
             st.warning("This job no longer exists. Jobs are deleted after a "
                        "period of inactivity.")
         else:

@@ -17,6 +17,8 @@ from api.workspace import (
     WorkspaceMetadataError,
 )
 from api.services.pipeline import PipelineService
+from api.dataset_service import discard_job
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter(tags=["Jobs"])
 
@@ -62,20 +64,6 @@ async def run_pipeline(request: PipelineRequest):
     )
 
 
-@router.get("/jobs", tags=["Jobs"])
-async def list_jobs():
-    load_persisted_jobs()
-
-    return [
-        {
-            "job_id": jid,
-            "status": job["status"],
-            "progress": job["progress"],
-            "message": job["message"],
-        }
-        for jid, job in jobs.items()
-    ]
-
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
 async def get_job(job_id: str):
@@ -97,30 +85,11 @@ async def get_job(job_id: str):
 @router.delete("/jobs/{job_id}")
 async def delete_job(job_id: str):
     if job_id not in jobs:
-        load_persisted_jobs()
-
-    if job_id not in jobs:
         raise HTTPException(404, "Job not found")
-
     if jobs[job_id]["status"] in ("pending", "queued", "running"):
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot delete a pending or running job",
-        )
-
-    try:
-        delete_workspace(job_id)
-    except (InvalidJobIdError, WorkspaceNotFoundError):
-        raise HTTPException(404, "Job workspace not found")
-    except WorkspaceMetadataError:
-        raise HTTPException(
-            status_code=500,
-            detail="Job workspace metadata is invalid",
-        )
-
-    del jobs[job_id]
-
-    return {"message": f"Job {job_id} deleted"}
+        raise HTTPException(400, "Cannot delete a running job")
+    await run_in_threadpool(discard_job, job_id)
+    return {"message": "Job deleted"}
 
 
 @router.websocket("/ws/{job_id}")

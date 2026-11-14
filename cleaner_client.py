@@ -68,12 +68,18 @@ def _parse_error(resp: httpx.Response) -> ApiError:
 
 class CleanerClient:
     def __init__(self, base_url: Optional[str] = None,
-                 http: Optional[httpx.Client] = None):
+                 http: Optional[httpx.Client] = None,
+                 access_code: Optional[str] = None):
         self._http = http or httpx.Client(
             base_url=base_url or os.environ.get(
                 "IMAGE_CLEANING_API_URL", DEFAULT_API_URL),
             timeout=httpx.Timeout(30.0, read=600.0, write=600.0),
         )
+        if access_code:
+            self._http.headers["X-Access-Code"] = access_code
+
+    def delete_job(self, job_id: str) -> dict:
+        return self._send("DELETE", self._job_path(job_id)).json()
 
     def _send(self, method: str, url: str, **kwargs) -> httpx.Response:
         try:

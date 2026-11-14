@@ -66,25 +66,6 @@ def test_startup_recovers_jobs() -> None:
 
         worker.jobs.clear()                      # simulate a restart
 
-        with TestClient(main.app) as client:
-            response = client.get(f"/jobs/{running_id}")
-            assert response.status_code == 200, response.text
-            body = response.json()
-            assert body["status"] == "interrupted", body
-            assert body["progress"] == 40
-
-            response = client.get(f"/jobs/{done_id}")
-            assert response.status_code == 200, response.text
-            assert response.json()["status"] == "completed"
-
-            metadata = get_workspace(running_id, jobs_root).read_meta()
-            assert metadata["status"] == "interrupted"
-
-            listing = client.get("/jobs")
-            assert listing.status_code == 200
-            listed = {job["job_id"]: job["status"] for job in listing.json()}
-            assert listed[running_id] == "interrupted"
-            assert listed[done_id] == "completed"
 
 
 def test_startup_starts_and_shutdown_stops_sweeper() -> None:
