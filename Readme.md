@@ -61,7 +61,7 @@ scene classification dataset.
 |-------|------:|------:|-------:|-------:|
 | Train | 13,474 | 11,099 | 627 (4.65%) | 1,748 (12.97%) |
 | Val | 1,497 | 1,260 | 66 (4.41%) | 171 (11.42%) |
-| **Total** | **14,971** | **12,359** | **693** | **1,919** |
+| **Total** | **14,971** | **11,847** | **693** | **2,431** |
 
 *Reports: `reports/Animal/train_master_report.csv`, `reports/Animal/val_master_report.csv`*
 
@@ -99,8 +99,8 @@ without modifying any source code.
 | Visual domain | Animals | Scenes |
 | Classes | 5 | 6 |
 | Input images | 14,971 | 17,034 |
-| Clean images | 12,359 (82.6%) | 13,477 (79.1%) |
-| Review | 1,919 | 3,120 |
+| Clean images | 11,847 (79.1%) | 12,946 (76.0%) |
+| Review | 2,431 | 3,651 |
 | Remove | 693 | 437 |
 | Code changes required | — | **0** |
 
