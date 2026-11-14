@@ -547,12 +547,12 @@ similar body proportions in certain photography angles.
 | Exact duplicates | 408 | 3.03% |
 | Near duplicates | 527 | 3.91% |
 | Blurry images | 676 | 5.02% |
-| Noisy images | 635 | 4.71% |
+| Noisy images (confirmed after refinement) | 19 | 0.14% |
 | Outliers | 951 | 7.06% |
 | Mislabeled | 174 | 1.29% |
 | **To REMOVE** | **627** | **4.65%** |
-| **To REVIEW** | **1,748** | **12.97%** |
-| **Clean** | **11,099** | **82.38%** |
+| **To REVIEW** | **2,221** | **16.48%** |
+| **Clean** | **10,626** | **78.86%** |
 
 ### Validation Set (1,497 images)
 
@@ -561,12 +561,12 @@ similar body proportions in certain photography angles.
 | Exact duplicates | 1 | 0.07% |
 | Near duplicates | 11 | 0.73% |
 | Blurry images | 75 | 5.01% |
-| Noisy images | 9 | 0.60% |
+| Outliers | 145 | 9.69% |
 | Outliers | 132 | 8.82% |
 | Mislabeled | 60 | 4.01% |
 | **To REMOVE** | **66** | **4.41%** |
-| **To REVIEW** | **171** | **11.42%** |
-| **Clean** | **1,260** | **84.17%** |
+| **To REVIEW** | **210** | **14.03%** |
+| **Clean** | **1,221** | **81.56%** |
 
 ## Classifier Experiment Results
 
