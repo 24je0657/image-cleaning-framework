@@ -1,0 +1,12 @@
+venv/
+venv_py312_backup/
+.git/
+data/
+data_clean/
+embeddings/
+reports/
+jobs/
+notebooks/
+*.zip
+**/__pycache__/
+*.step*_backup

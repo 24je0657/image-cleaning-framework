@@ -168,7 +168,7 @@ def render_card(job_id: str, item: dict, apply_removals: bool,
     path, group = item["path"], item["group"]
     default = default_decision(group, apply_removals, review_default)
     try:
-        st.image(fetch_image(job_id, path), width=220)
+        st.image(fetch_image(access_code,job_id, path), width=220)
     except ApiError:
         st.caption("Preview unavailable")
     st.text(item["display_path"])
@@ -245,7 +245,8 @@ def render_approval(job_id: str, totals: dict, by_class: dict,
             blocked = not st.checkbox(
                 "I understand and want to build it anyway.",
                 key=f"confirm_empty::{job_id}::{'|'.join(empty)}")
-    if st.button("Build cleaned dataset", type="primary", disabled=blocked):
+    if st.button("Build cleaned dataset", type="primary", disabled=blocked,
+                 key=f"build::{job_id}"):
         try:
             payload = build_approval_payload(apply_removals, review_default,
                                              overrides)
@@ -277,7 +278,7 @@ def render_download(job_id: str) -> None:
     st.subheader("5 · Download")
     ss = st.session_state
     if ss.get("zip") is None:
-        if st.button("Prepare download"):
+        if st.button("Prepare download", key=f"prepare::{job_id}"):
             with st.spinner("Packaging your dataset…"):
                 try:
                     ss.zip = client.download(job_id)
@@ -291,7 +292,8 @@ def render_download(job_id: str) -> None:
         st.warning(f"{missing} approved images are missing from this ZIP.")
     st.download_button("Download cleaned dataset (ZIP)", data=data,
                        file_name=f"cleaned_dataset_{job_id[:8]}.zip",
-                       mime="application/zip", type="primary")
+                       mime="application/zip", type="primary",
+                       key=f"download::{job_id}")
     st.caption("The ZIP also contains approval_decisions.csv (every image, "
                "its verdict and your decision) and summary.json.")
 
@@ -341,7 +343,9 @@ def render_review(job_id: str) -> None:
                        (tab_clean, "CLEAN")):
         with tab:
             render_gallery(job_id, group, summary, shown_apply, review_default)
-        render_approval(job_id, totals, summary.get("by_class", {}),
+
+    # Once, after all tabs. It was inside the loop, so it ran three times.
+    render_approval(job_id, totals, summary.get("by_class", {}),
                     apply_removals, review_default)
 
 

@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+python-multipart
+streamlit
+httpx
+pydantic
+numpy
+pandas
+scikit-learn
+pillow
+opencv-python-headless
+imagehash
+pybktree
+matplotlib
+seaborn
+plotly

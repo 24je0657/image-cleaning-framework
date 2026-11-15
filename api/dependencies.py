@@ -43,7 +43,7 @@ class ConvAutoencoder(nn.Module):
 @lru_cache(maxsize=1)
 def get_resnet():
     print(f"Loading ResNet50 on {DEVICE}...")
-    model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
+    model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
     model = torch.nn.Sequential(*list(model.children())[:-1])
     model.eval().to(DEVICE)
     print("ResNet50 ready ✅")

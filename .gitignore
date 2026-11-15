@@ -46,3 +46,5 @@ notebooks/visual_inspection_outputs/venv_py312_backup/
 /venv_py312_backup/
 # Per-job uploaded datasets and generated artifacts
 /jobs/
+!models/autoencoder.pth
+!models/autoencoder.pth
