@@ -27,18 +27,52 @@ from cleaner_client import (
 PAGE_SIZE = 12
 POLL_SECONDS = 2
 
-st.set_page_config(page_title="Clean your image dataset",
-                   page_icon="🧹", layout="wide")
+st.set_page_config(page_title="Dataset Cleaner", page_icon="🗂️",
+                   layout="wide")
+
+st.markdown("""
+<style>
+[data-testid="stSidebar"] { border-right: 1px solid #1E2A44; }
+.brand { font-size: 1.35rem; font-weight: 700; margin: 0 0 1.4rem 0; }
+.side-label { font-size: .75rem; letter-spacing: .14em; font-weight: 600;
+              text-transform: uppercase; color: #3B82F6; margin: 1rem 0 .4rem; }
+.job-card { border: 1px solid #1E2A44; border-radius: 12px;
+            padding: .9rem 1rem; background: #101828; margin-bottom: .6rem; }
+.job-card b { font-size: 1.05rem; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+       background: #6B7280; margin-left: .5rem; }
+.dot.live { background: #22C55E; }
+.step { font-size: 1.9rem; font-weight: 700; margin: 1.6rem 0 .6rem; }
+.step span { color: #22B8E6; margin-right: .5rem; }
+.subtitle { color: #9AA4B8; margin: -.4rem 0 1rem; }
+[data-testid="stFileUploaderDropzone"] {
+    border: 2px dashed #3B82F6; border-radius: 14px;
+    background: #131B2E; padding: 1.6rem; }
+button[kind="primary"] { border-radius: 10px; font-weight: 600; }
+div[data-testid="stMetric"] { background: #101828; border: 1px solid #1E2A44;
+    border-radius: 12px; padding: .8rem 1rem; }
+</style>
+""", unsafe_allow_html=True)
+
+
+def step(number: str, title: str) -> None:
+    # Static strings only. Never pass user-derived text into this.
+    st.markdown(f'<div class="step"><span>{number}</span>· {title}</div>',
+                unsafe_allow_html=True)
 
 
 @st.cache_resource
 def get_client(access_code: str) -> CleanerClient:
     return CleanerClient(access_code=access_code or None)
 
-
 with st.sidebar:
+    st.markdown('<div class="brand">Dataset Cleaner</div>',
+                unsafe_allow_html=True)
+    st.markdown('<div class="side-label">Access code</div>',
+                unsafe_allow_html=True)
     access_code = st.text_input("Access code", type="password",
-                                key="access_code")
+                                key="access_code",
+                                label_visibility="collapsed")
 client = get_client(access_code)
 
 
@@ -84,7 +118,8 @@ def render_upload() -> None:
         "(`cats/`, `dogs/`, …) or `train/` and `val/` folders that each "
         "contain class folders. JPG and PNG images only. Your original "
         "upload is never modified.")
-    file = st.file_uploader("Dataset ZIP", type=["zip"])
+    file = st.file_uploader("Dataset ZIP", type=["zip"],
+                        label_visibility="collapsed")
     if st.button("Upload and check", type="primary", disabled=file is None):
         with st.spinner("Uploading and checking your dataset…"):
             try:
@@ -354,21 +389,30 @@ def render_review(job_id: str) -> None:
 def main() -> None:
     init_state()
     with st.sidebar:
-        st.header("Job")
         job_id = st.session_state.job_id
-        if job_id and st.button("Delete this job's data"):
-            try:
-                client.delete_job(job_id)
-            except ApiError as exc:
-                show_error(exc)
-            else:
-                start_over()
-                st.rerun()
-        st.code(job_id or "none yet")
-        st.button("Start over", on_click=start_over)
+        st.markdown('<div class="side-label">Job status</div>',
+                    unsafe_allow_html=True)
+        state = "Active" if job_id else "Idle"
+        dot = "dot live" if job_id else "dot"
+        st.markdown(f'<div class="job-card"><b>Current job: {state}</b>'
+                    f'<span class="{dot}"></span></div>',
+                    unsafe_allow_html=True)
+        if job_id:
+            st.caption(f"ID {job_id[:8]}…")
+            if st.button("Delete this job's data"):
+                try:
+                    client.delete_job(job_id)
+                except ApiError as exc:
+                    show_error(exc)
+                else:
+                    start_over()
+                    st.rerun()
+        st.button("Start over", on_click=start_over, use_container_width=True)
         st.caption(CHECKS_NOTE)
 
-    st.title("🧹 Clean your image dataset")
+    st.title("Clean your image dataset")
+    st.markdown('<div class="subtitle">Tool for dataset quality and '
+                'optimization</div>', unsafe_allow_html=True)
     if not job_id:
         render_upload()
         return
