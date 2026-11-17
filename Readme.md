@@ -1,802 +1,114 @@
-# Intelligent Image Data Cleaning Framework Using Deep Learning
+# Image Dataset Cleaning Framework
 
-An end-to-end deep learning framework for automatically detecting and removing low-quality images—including duplicates, blurry images, noisy samples, outliers, and mislabeled data—to improve dataset quality for computer vision applications.
-
-![Python](https://img.shields.io/badge/Python-3.10-blue)
-![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-red)
-![OpenCV](https://img.shields.io/badge/OpenCV-Image%20Processing-green)
-![FastAPI](https://img.shields.io/badge/FastAPI-Production%20API-teal)
-![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-orange)
-![Status](https://img.shields.io/badge/Status-Completed-brightgreen)
-![License](https://img.shields.io/badge/License-MIT-purple)
-
-## Overview
-
-Large-scale image datasets often contain duplicate images, blurry samples, noisy images, outliers, and incorrect labels. These quality issues reduce model accuracy, increase training time, and introduce unwanted bias into deep learning models.
-
-This project presents an intelligent image data cleaning framework that combines traditional computer vision techniques with deep learning to automatically identify and report poor-quality images before model training.
-
-The framework integrates feature embeddings extracted using ResNet50, perceptual hashing (with BK-tree acceleration), cosine similarity, Laplacian variance, convolutional autoencoders, and machine learning–based anomaly detection to create a scalable preprocessing pipeline for computer vision datasets. A production-ready FastAPI backend exposes all pipeline modules as asynchronous REST endpoints.
-
-This framework combines traditional computer vision techniques, deep learning, and unsupervised machine learning to automatically identify duplicate, blurry, noisy, outlier, and mislabeled images. A weighted Decision Engine aggregates outputs from all quality modules to generate actionable cleaning recommendations, while a Streamlit dashboard provides interactive visualization and dataset inspection.
-
-## Dataset
-
-This project uses the **Animals Image Dataset** from Kaggle for training and evaluation.
-
-- **Dataset:** Animals Image Dataset
-- **Source:** [Animals Image Dataset (Kaggle)](https://www.kaggle.com/datasets/antobenedetti/animals/data)
-- **Classes:** Cat, Dog, Elephant, Horse, Lion
-- **Dataset Structure:**
- <p align="center">
-  <img src="assets/project_pipeline.png" width="950">
-</p>
-
-> **Note:** The dataset is not included in this repository due to GitHub's file size limitations. Please download it from Kaggle and place it under the `data/raw/Animal/` directory before running the project.
-
-### Dataset Finding — Format Anomaly
-
-During preprocessing, the framework detected that 247 out of 300 validation horse images (82.3%) were PNG format, while all other classes were exclusively JPG. This format inconsistency was identified as a potential source of preprocessing and reconstruction inconsistencies.
-
-The framework automatically detected the anomaly and converted the PNG files to JPG (quality=95), with MSE-based verification, using `src/format_converter.py`. Subsequent analysis showed that the format difference was **not the root cause of the higher horse reconstruction-error distribution**.
-
-## Cross-Dataset Validation — Intel Image Classification
-- **Dataset source:** [Intel Image Classification — Kaggle](https://www.kaggle.com/datasets/puneet6060/intel-image-classification)
-
-The framework was additionally evaluated on the Intel Image Classification
-dataset to assess its behavior on a different visual domain and a six-class
-scene classification dataset.
-
-- **Dataset:** Intel Image Classification
-- **Classes:** Buildings, Forest, Glacier, Mountain, Sea, Street
-- **Training images:** 14,034
-- **Test images:** 3,000
-- **Total images processed:** 17,034
-
-## Cleaning Results
-
-### Animal Dataset
-
-| Split | Input | Clean | Remove | Review |
-|-------|------:|------:|-------:|-------:|
-| Train | 13,474 | 10,626 (78.9%) | 627 (4.7%) | 2,221 (16.5%) |
-| Val | 1,497 | 1,221 (81.6%) | 66 (4.4%) | 210 (14.0%) |
-| **Total** | **14,971** | **11,847** | **693** | **2,431** |
-
-*Reports: `reports/Animal/train_master_report.csv`, `reports/Animal/val_master_report.csv`*
-
-### Training Set — Issue Breakdown
-
-| Issue Type | Count | Percentage |
-|------------|------:|----------:|
-| Exact duplicates | 408 | 3.03% |
-| Near duplicates (unique images) | 527 | 3.91% |
-| Blurry images | 676 | 5.02% |
-| Noisy (confirmed after refinement) | 8 | 0.06% |
-| Outliers | 951 | 7.06% |
-| Mislabeled | 174 | 1.29% |
-
-### Validation Set — Issue Breakdown
-
-| Issue Type | Count | Percentage |
-|------------|------:|----------:|
-| Exact duplicates | 1 | 0.07% |
-| Near duplicates (unique images) | 11 | 0.73% |
-| Blurry images | 75 | 5.01% |
-| Outliers | 145 | 9.69% |
-| Mislabeled | 60 | 4.01% |
+Upload an image dataset (ZIP) and get back a cleaned copy. The tool finds duplicates, blurry and noisy images, outliers and likely mislabels, shows you why each image was flagged, and lets you approve what gets removed. Your original upload is never modified.
 
 
-## Cross-Dataset Validation
+![Review page](assets/review_page.png)
 
-To assess dataset independence, the complete pipeline was run on the
-[Intel Image Classification dataset](https://www.kaggle.com/datasets/puneet6060/intel-image-classification)
-— a six-class scene classification dataset from a different visual domain —
-without modifying any source code.
+## Features
 
-| Metric | Animal Dataset | Intel Dataset |
-|--------|---------------|--------------|
-| Visual domain | Animals | Scenes |
-| Classes | 5 | 6 |
-| Input images | 14,971 | 17,034 |
-| Clean images | 11,847 (79.1%) | 12,946 (76.0%) |
+| Check | Method |
+|---|---|
+| Exact / near duplicates | pHash + BK-tree, verified with ResNet50 cosine similarity |
+| Blur | Laplacian variance, adaptive per-class threshold |
+| Noise | Convolutional autoencoder reconstruction error |
+| Outliers | PCA + Isolation Forest (global and per class) |
+| Mislabels | DBSCAN + nearest neighbours + class centroids (3-vote ensemble) |
+
+A decision engine combines the signals into **CLEAN**, **REVIEW** or **REMOVE**. Proposed removals are never applied unless you approve them.
+
+## Run it
+
+### Option 1: Docker (recommended)
+
+Requires Docker and about 4 GB of free disk.
+
+```bash
+git clone https://github.com/24je0657/image-cleaning-framework.git
+cd image-cleaning-framework
+
+docker build -t cleaner .
+
+# Create an access code (16+ characters) and keep it private
+export CODE="$(python -c 'import secrets;print(secrets.token_urlsafe(24))')"
+echo "$CODE"
+
+docker run --rm -p 7860:7860 -e IMAGE_CLEANING_ACCESS_CODES="$CODE" cleaner
+```
+
+Open <http://localhost:7860>, paste the code in the sidebar, and upload a ZIP.
+
+### Option 2: Local Python
+
+```bash
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+python run_api.py                                          # terminal 1
+streamlit run cleaner_app.py --server.maxUploadSize 500    # terminal 2
+```
+
+Without `IMAGE_CLEANING_ACCESS_CODES` set, access control is off. Use this only on your own machine.
+
+### Option 3: Command line
+
+```bash
+python run_pipeline.py --data_dir data/raw/Animal --output_dir data_clean/Animal
+```
+
+Reports are written to `reports/<dataset_name>/`.
+
+## Using the web app
+
+1. **Upload** a ZIP of class folders (`cats/`, `dogs/`) or `train/` and `val/` folders. JPG and PNG only, at least 30 images per class in each split.
+2. **Choose checks** and start cleaning (about 1 minute for 500 images on a laptop CPU).
+3. **Review** flagged images with the reason for each one.
+4. **Approve** and build the cleaned dataset.
+5. **Download** a ZIP with the images, `approval_decisions.csv` and `summary.json`.
+
+## Results
+
+Run on two datasets with no code changes. These are the tool's decisions, not detector accuracy.
+
+| | Animal (5 classes) | Intel (6 classes) |
+|---|---:|---:|
+| Images | 14,971 | 17,034 |
+| Clean | 11,847 (79.1%) | 12,946 (76.0%) |
 | Review | 2,431 | 3,651 |
 | Remove | 693 | 437 |
-| Code changes required | — | **0** |
 
-The pipeline auto-discovered the six Intel classes, calibrated
-per-class blur and noise thresholds to the scene image distribution,
-and exported clean images without any dataset-specific configuration.
+Manual checks on Animal: duplicate detection 50/50 correct, high-confidence mislabels 37/37 correct.
 
-These figures describe the pipeline's decisions on each dataset.
-They are not claims of detector accuracy on Intel images, which
-were not manually validated.
+**Effect on a classifier** (logistic regression on frozen ResNet50 features, same validation set):
 
-### Intel — Detector Notes
-
-- **Outlier detection:** Global and per-class Isolation Forest flags
-  are combined with logical OR. An image is flagged when either
-  detector identifies it as anomalous.
-- **Noise refinement:** 571 training images initially flagged by the
-  autoencoder were all classified as `review_possible_ood` — no images
-  reached `confirmed_noisy`. The Decision Engine treats this as a
-  low-confidence signal.
-- **Near-duplicate detection:** 793 unique training images were flagged
-  across three confidence tiers: 33 DEFINITE, 65 LIKELY, 695 POSSIBLE.
-  These are unique flagged images, not pair counts.
-
-The pipeline completed successfully for both splits, and all selected clean
-images were exported without reported image-copy failures.
-
-
-
-## Project Pipeline
-
-<p align="center">
-  <img src="assets/project_pipeline.png" width="950">
-</p>
-
-## Pipeline Architecture
-
-<p align="center">
-  <img src="assets/architecture.png" width="950">
-</p>
-
-## Key Features
-
-- **Image Validation & Preprocessing**
-  - Detects corrupted and unreadable images.
-  - Standardizes image format and dimensions using OpenCV and PIL.
-  - Detects and reports format anomalies across classes.
-
-- **Feature Embedding Extraction**
-  - Extracts 2048-dimensional deep feature embeddings using a pretrained ResNet50 model.
-  - Stores embeddings for efficient downstream analysis.
-
-- **Duplicate Detection**
-  - Identifies exact duplicate images using multi-hash perceptual hashing (pHash + dHash + wHash + aHash).
-  - Accelerated using a **BK-tree** (O(n log n) vs O(n²) brute force) — ~75× speedup on 13k images.
-  - Empirically validated: initial 2-of-4 rule achieved 68% precision (34/50); tightened rule (pHash required + 1 corroborating hash) achieved **100% precision (50/50)** on manual validation.
-  - Detects near-duplicate images using cosine similarity with a three-tier confidence band (DEFINITE ≥ 0.99, LIKELY ≥ 0.97, POSSIBLE ≥ 0.93).
-
-- **Blur Detection**
-
-- Uses **Variance of Laplacian** as a lightweight image sharpness heuristic.
-- Computes the Laplacian variance for each image to identify potentially blurry images.
-- Uses **adaptive class-specific thresholds** rather than a single global threshold.
-- Thresholds are determined using the **5th percentile** of the class-wise blur-score distribution.
-- Includes a **contamination guard** to prevent an excessively large portion of a class from being flagged.
-- Blur scores and threshold information are recorded in the generated reports for analysis and validation.
-
-- **Noise Detection**
-  - Utilises a Convolutional Autoencoder trained on a clean subset of the dataset.
-  - Detects noisy images using reconstruction error (Mean Squared Error).
-  - Applies **adaptive per-class dynamic thresholds** (`mean + 2 × standard deviation` per class) for robust noise classification.
-
-- **Outlier Detection**
-  - Identifies visually irrelevant images using Isolation Forest on PCA-reduced (2048 → 128 dimensions) deep feature embeddings.
-  - Runs both globally (dataset-wide) and per-class to catch class-specific anomalies.
-
-- **Mislabel Detection**
-  - Detects potentially mislabeled images using an ensemble of three methods:
-    - **DBSCAN clustering** (replaced KMeans — no K to tune, naturally identifies density outliers)
-    - **K-Nearest Neighbor voting**
-    - **Class centroid distance analysis**
-  - Images flagged by 2 or more methods receive MEDIUM or HIGH confidence scores.
-
-- **Decision Engine**
-  - Aggregates all module outputs using a **confidence-adjusted weighted scoring** strategy.
-  - Weights vary by detection confidence (e.g., HIGH mislabel = 9 vs MEDIUM = 6) rather than flat weights.
-  - Classifies every image as CLEAN, REVIEW, or REMOVE with a priority score.
-
-- **Interactive Streamlit Dashboard**
-  - 9-tab Streamlit interface covering Home, Overview, Before vs After, Duplicates, Quality, Outliers & Mislabels, Image Inspector, Analytics, and Export.
-
-- **Production FastAPI Backend**
-  - Async REST API with routes/services separation.
-  - Background job submission with WebSocket real-time progress.
-  - Single-image analysis endpoint with file upload support.
-
-## Project Structure
-
-```text
-image-cleaning-framework/
-│
-├── api/                             # Production FastAPI backend
-│   ├── main.py                      # App factory — registers all routers
-│   ├── schemas.py                   # Pydantic request/response models
-│   ├── dependencies.py              # Shared model loading (lru_cache)
-│   ├── worker.py                    # Async job management + ThreadPoolExecutor
-│   ├── routes/
-│   │   ├── health.py
-│   │   ├── upload.py
-│   │   ├── jobs.py
-│   │   └── results.py
-│   └── services/
-│       ├── pipeline.py
-│       ├── duplicate_service.py
-│       ├── quality_service.py
-│       ├── outlier_service.py
-│       ├── mislabel_service.py
-│       └── decision_engine.py
-│
-├── assets/                          # Images used in the README
-│   ├── project_pipeline.png
-│   ├── architecture.png
-│   ├── autoencoder_loss_curve.png
-│   └── reconstruction_sample.png
-│
-├── data/
-│   └── raw/
-│       └── Animal/
-│           ├── train/
-│           └── val/
-│
-├── embeddings/                      # ResNet50 feature embeddings (.npy)
-│
-├── models/                          # Trained deep learning models
-│   └── autoencoder.pth
-│
-├── notebooks/                       # Experimentation and validation scripts
-│
-├── reports/                         # Generated CSV reports per module
-│
-├── src/
-│   ├── preprocessing.py             # Format validation + anomaly detection
-│   ├── embeddings.py                # ResNet50 feature extraction
-│   ├── duplicates.py                # BK-tree + multi-hash duplicate detection
-│   ├── quality.py                   # Adaptive blur + noise detection
-│   ├── format_converter.py          # PNG → JPG format normalisation
-│   ├── prepare_autoencoder_data.py  # Clean subset CSV for autoencoder training
-│   ├── outliers.py                  # PCA + Isolation Forest outlier detection
-│   ├── mislabel.py                  # DBSCAN + KNN + centroid mislabel detection
-│   └── decision_engine.py          # Confidence-adjusted master report
-│
-├── app.py                           # Streamlit dashboard (9 tabs)
-├── run_pipeline.py                  # Master script — runs all 9 steps
-├── run_api.py                       # FastAPI entry point (uvicorn)
-├── requirements.txt
-├── README.md
-└── LICENSE
-```
-
-### Folder Description
-
-| Folder/File | Description |
-|--------------|-------------|
-| **api/** | Production FastAPI backend with routes/services separation. |
-| **assets/** | Images and figures used in the project documentation. |
-| **data/** | Raw image dataset used for training and evaluation. |
-| **embeddings/** | Deep feature embeddings extracted using ResNet50. |
-| **models/** | Saved deep learning model weights (Autoencoder). |
-| **notebooks/** | Validation scripts and diagnostic notebooks. |
-| **reports/** | CSV reports generated by each quality assessment module. |
-| **src/** | Source code implementing all image quality detection modules. |
-| **app.py** | Streamlit dashboard for interactive visualization (9 tabs). |
-| **run_pipeline.py** | Master script — single command runs all 9 pipeline steps. |
-| **run_api.py** | FastAPI production backend entry point. |
-| **requirements.txt** | Python package dependencies required to run the project. |
-
-## Technology Stack
-
-| Category | Technologies |
-|----------|--------------|
-| **Programming Language** | Python 3.10 |
-| **Deep Learning** | PyTorch, TorchVision |
-| **Computer Vision** | OpenCV, Pillow |
-| **Feature Extraction** | ResNet50 (Pretrained CNN) |
-| **Machine Learning** | Scikit-learn (PCA, DBSCAN, KNN, Isolation Forest, Cosine Similarity) |
-| **Data Processing** | NumPy, Pandas |
-| **Image Hashing** | ImageHash (pHash, dHash, wHash, aHash), pybktree |
-| **Visualization** | Matplotlib, Plotly, Seaborn |
-| **Web Framework** | Streamlit (dashboard), FastAPI (production API) |
-| **API Server** | Uvicorn, Pydantic |
-| **Development Tools** | Git, GitHub, Jupyter Notebook, Google Colab |
-
-## Framework Modules
-
-### 1) Image Validation & Preprocessing
-
-- Detects corrupted and unreadable image files.
-- Validates supported image formats.
-- Standardizes image dimensions and color format.
-- Detects format distribution anomalies per class (e.g., PNG vs JPG imbalance).
-- Generates preprocessing reports for further analysis.
-
----
-
-### 2) Feature Embedding Extraction
-
-- Uses a pretrained **ResNet50** model to extract 2048-dimensional feature embeddings.
-- Removes the final classification head — retains the global average pooling output.
-- Stores embeddings as `.npy` files for efficient reuse across all downstream modules.
-- Embeddings are shared by duplicate detection, outlier detection, and mislabel detection.
-
----
-
-### 3) Duplicate Detection
-
-- Detects **exact duplicates** using multi-hash perceptual hashing (pHash + dHash + wHash + aHash).
-- **BK-tree indexing** reduces candidate search from O(n²) to O(n log n) — ~75× speedup on 13k images.
-- **Empirically validated matching rule:** pHash must match (strongest signal) plus at least one corroborating hash. Initial 2-of-4 rule achieved 68% precision (34/50 manual pairs). Tightened rule achieved **100% precision (50/50)**.
-- Identifies **near-duplicate images** using cosine similarity with three-tier confidence bands.
-- Generates duplicate reports with cosine scores and confidence tiers for each flagged pair.
-
----
-
-### 4) Blur Detection
-
-- Measures image sharpness using the **Variance of Laplacian**.
-- **Two-pass adaptive thresholding:**
-  - Pass 1 collects all blur scores per class.
-  - Pass 2 applies a **contamination guard**: if estimated blur rate exceeds 30% using the global threshold, the class falls back to the global value to avoid threshold contamination.
-  - Otherwise, per-class threshold is set at the **5th percentile** of the class blur distribution.
-- Flags images whose blur score falls below the class-specific threshold.
-
-#### Adaptive Blur Thresholds (Training Set)
-
-| Class | Adaptive Threshold |
-|--------|-------------------:|
-| Cat | 94.7 |
-| Dog | 65.8 |
-| Elephant | 747.8 |
-| Horse | 192.6 |
-| Lion | 535.4 |
-
-> The 11× difference between Dog (65.8) and Elephant (747.8) reflects genuine differences in natural image texture — elephant skin produces far higher Laplacian variance than smooth dog coats. A single global threshold would either miss blurry elephant images or over-flag sharp dog images.
-
-
-#### 5) Noise Detection
-
-- Trains a **Convolutional Autoencoder** on a clean subset of images identified through a CSV manifest.
-- Computes reconstruction error (Mean Squared Error) for every image.
-- Uses **adaptive per-class dynamic thresholds** (`mean + 2 × standard deviation`) rather than relying only on a global threshold.
-- Images exceeding their class-specific reconstruction-error threshold are initially flagged as potentially noisy.
-- A **noise refinement stage** further analyzes initially flagged images to distinguish likely noise from visually unusual or potentially out-of-distribution samples.
-- Each initially flagged image receives one of the following verdicts:
-  - `confirmed_noisy`
-  - `review_noise`
-  - `review_possible_ood`
-  - `not_flagged`
-- The refined noise signal (`is_noisy_refined`) is used by the Decision Engine for final quality scoring.
-- This refinement substantially reduces false noise flags caused by legitimate but visually unusual images.
-
-#### Noise Refinement Results
-
-| Split | Initially Flagged | Refined Noisy | Possible OOD | Review Noise | Confirmed Noisy |
-|-------|------------------:|--------------:|-------------:|-------------:|----------------:|
-| Train | 635 | **19** | 616 | 11 | 8 |
-| Validation | 54 | **9** | 45 | 4 | 5 |
-
-The refinement stage reduced the final noise signal from **635 to 19 images in the training set** and from **54 to 9 images in the validation set**, while retaining potentially unusual samples as `review_possible_ood` instead of automatically classifying them as noisy.
-
----
-
-### 6) Format Normalisation
-
-- Scans the full dataset for format distribution anomalies across all classes and splits.
-- Detected that 247/300 (82.3%) of validation horse images were PNG while all other classes were JPG.
-- Converts non-JPG images to JPG (quality=95) with MSE-based verification before removing originals.
-- Confirmed PNG format was not the root cause of high horse noise rate — horse images have genuinely higher reconstruction error due to greater visual diversity.
-
----
-
-### 7) Outlier Detection
-
-- Projects 2048-dimensional ResNet50 embeddings to 128 dimensions using PCA.
-- Runs **Isolation Forest** both globally (dataset-wide) and per-class.
-- Per-class detection catches class-specific anomalies (e.g., cartoons mixed into a photo class).
-- Combined flag: image is flagged if either global or per-class Isolation Forest marks it anomalous.
-
----
-
-### 8) Mislabel Detection
-
-- Identifies potentially mislabeled images through embedding-based ensemble analysis.
-- Uses three methods operating in the same PCA-reduced embedding space (128 dimensions):
-  - **DBSCAN clustering** — no K to tune; images not belonging to any dense cluster are naturally suspicious.
-  - **K-Nearest Neighbor voting** — images where fewer than 40% of neighbors share their declared class are flagged.
-  - **Class centroid distance analysis** — images closer to a different class centroid than their own are flagged.
-- Images flagged by ≥ 2 methods are classified as MEDIUM (2/3) or HIGH (3/3) confidence mislabels.
-
----
-
-### 9) Decision Engine
-
-- Aggregates outputs from all detection modules using a **confidence-adjusted weighted scoring** strategy.
-- Uses the refined noise signal .
-- Weights vary by detection confidence rather than using flat per-flag weights:
-  - HIGH mislabel confidence → weight 9; MEDIUM → 6; LOW → 3
-  - Severe blur (score < 20) → weight 8; moderate blur → 5
-  - DEFINITE near-duplicate → weight 10; LIKELY → 7; POSSIBLE → 4
-- Classifies every image as CLEAN, REVIEW, or REMOVE with a priority score.
-- Generates a master report combining all module flags per image.
-
----
-
-### 10) Production FastAPI Backend
-
-- Full REST API with routes/services architecture separation.
-- Models loaded once at startup via `lru_cache` — never reloaded per request.
-- CPU-bound tasks (ResNet50 inference, OpenCV, sklearn) run in `ThreadPoolExecutor` — never block the event loop.
-- **Endpoints:**
-  - `POST /pipeline/run` — submit full pipeline as async background job, returns `job_id` immediately.
-  - `GET /jobs/{job_id}` — poll job status and progress.
-  - `WS /ws/{job_id}` — WebSocket real-time progress updates.
-  - `POST /analyze/image` — analyze a single image by path.
-  - `POST /analyze/upload` — upload and analyze an image directly.
-  - `GET /stats/{split}` — cleaning summary from precomputed report.
-  - `GET /reports/{split}/{type}` — download any CSV report.
-  - `GET /health` — API health check with model status.
-- Interactive Swagger docs at `http://localhost:8000/docs`.
-
----
-
-### 11) Streamlit Dashboard
-
-- Interactive 9-tab interface for exploring dataset quality.
-- **Tabs:** Home · Overview · Before vs After · Duplicates · Quality · Outliers & Mislabels · Image Inspector · Analytics · Export.
-- Features: framework performance bar, color-coded DataFrames, per-class progress bars, confidence gauges, outlier scatter plots, mislabel heatmaps, image inspector with per-flag breakdown, and export with configurable removal rules.
-
-## Experimental Results
-
-### Duplicate Detection Validation
-
-| Version | Rule | Manual Precision |
-|---------|------|-----------------|
-| v1 | Any 2-of-4 hashes match, threshold=5 | 68% (34/50 pairs) |
-| v2 | pHash required + 1 corroborating hash, threshold=4 | **100% (50/50 pairs)** |
-| v3 (current) | v2 rule + BK-tree acceleration + cosine verification | **100% + ~75× faster** |
-
----
-
-### Autoencoder Training Loss
-
-The Convolutional Autoencoder was trained for **30 epochs** on a clean subset of the dataset using the **Adam optimizer** and **Mean Squared Error (MSE)** loss. A learning rate scheduler was applied to improve convergence.
-
-<p align="center">
-  <img src="assets/autoencoder_loss_curve.png" width="700">
-</p>
-
-**Training Summary**
-
-| Metric | Value |
-|---------|-------|
-| Optimizer | Adam |
-| Loss Function | Mean Squared Error (MSE) |
-| Epochs | 30 |
-| Initial Learning Rate | 0.001 |
-| Best Training Loss | **0.001215** (Epoch 28) |
-| Final Training Loss | **0.001304** |
-
-### Reconstruction Quality
-
-The trained autoencoder successfully reconstructs clean images while producing high reconstruction error for noisy or anomalous samples.
-
-<p align="center">
-  <img src="assets/reconstruction_sample.png" width="900">
-</p>
-
-## Outlier Detection Results
-
-The framework projects 2048-dimensional ResNet50 embeddings into a lower-dimensional feature space using PCA, followed by Isolation Forest for anomaly detection.
-
-### Training Set
-
-<p align="center">
-  <img src="assets/train_outlier_scatter.png" width="700">
-</p>
-
-### Validation Set
-
-<p align="center">
-  <img src="assets/val_outlier_scatter.png" width="700">
-</p>
-
-## Mislabel Detection Results
-
-### Training Set
-
-<p align="center">
-  <img src="assets/train_mislabel_heatmap.png" width="700">
-</p>
-
-### Validation Set
-
-<p align="center">
-  <img src="assets/val_mislabel_heatmap.png" width="700">
-</p>
-
-### Mislabel Detection — Empirical Validation
-
-**Manual precision validation on HIGH-confidence flags:**
-
-| Split | Reviewed | Confirmed | False Positives | Precision |
-|-------|--------:|----------:|----------------:|----------:|
-| Train | 20 | 20 | 0 | **100%** |
-| Val   | 17 | 17 | 0 | **100%** |
-| **Total** | **37** | **37** | **0** | **100%** |
-
-Every HIGH-confidence mislabel (3/3 methods agree) was
-manually verified as a genuine labeling error.
-
-**Confirmed confusion pairs (train):**
-
-| Declared → Predicted | Count | Confirmed |
-|---------------------|------:|----------:|
-| lion → elephant | 6 | 6 |
-| lion → horse | 5 | 5 |
-| elephant → horse | 3 | 3 |
-| horse → dog | 2 | 2 |
-| horse → lion | 1 | 1 |
-| horse → elephant | 1 | 1 |
-| elephant → lion | 1 | 1 |
-| lion → dog | 1 | 1 |
-
-**Key finding:** Lion images are the most commonly mislabeled
-class — frequently confused with elephant (6 cases) and horse
-(5 cases), consistent with shared savanna backgrounds and
-similar body proportions in certain photography angles.
-
-## Cleaning Results
-
-### Training Set (13,474 images)
-
-| Issue Type | Count | Percentage |
-|------------|------:|----------:|
-| Exact duplicates | 408 | 3.03% |
-| Near duplicates | 527 | 3.91% |
-| Blurry images | 676 | 5.02% |
-| Noisy images (confirmed after refinement) | 19 | 0.14% |
-| Outliers | 951 | 7.06% |
-| Mislabeled | 174 | 1.29% |
-| **To REMOVE** | **627** | **4.65%** |
-| **To REVIEW** | **2,221** | **16.48%** |
-| **Clean** | **10,626** | **78.86%** |
-
-### Validation Set (1,497 images)
-
-| Issue Type | Count | Percentage |
-|------------|------:|----------:|
-| Exact duplicates | 1 | 0.07% |
-| Near duplicates | 11 | 0.73% |
-| Blurry images | 75 | 5.01% |
-| Noisy images | 9 | 0.60% |
-| Outliers | 145 | 9.69% |
-| Mislabeled | 60 | 4.01% |
-| **To REMOVE** | **66** | **4.41%** |
-| **To REVIEW** | **210** | **14.03%** |
-| **Clean** | **1,221** | **81.56%** |
-
-## Classifier Experiment Results
-
-Three training sets were compared with the same linear classifier
-(logistic regression on frozen ResNet50 embeddings) and evaluated on the
-unmodified validation set (1,497 images; one image = 0.067 percentage points).
-
-| Dataset | Images | Validation accuracy |
+| Training set | Images | Accuracy |
 |---|---:|---:|
-| A: random subsets (mean of 5 draws) | 10,626 | 99.01% |
-| B: pipeline-clean (verdict CLEAN) | 10,626 | 97.93% |
-| C: full original | 13,474 | 99.00% |
+| Random subset (mean of 5 draws) | 10,626 | 99.01% |
+| Cleaned, CLEAN only | 10,626 | 97.93% |
+| Default workflow (REMOVE verdicts only) | 12,847 | 99.00% (random: 99.05%) |
 
-B trails the random baseline by 1.08 percentage points on average
-(per-draw range −1.00 to −1.14). B is one fixed set, so the spread reflects
-only the random baseline.
+Cleaning did not beat a random subset of the same size. The default workflow is indistinguishable from random (−0.05 points, under one validation image), and keeping only CLEAN images costs about 1 point. Outlier removal is the largest single cost. The validation set comes from the same distribution, so this says nothing about new data.
 
-**Note on B:** it keeps only CLEAN images, so it also drops every REVIEW
-image. The wizard keeps REVIEW images by default, so B is the strictest use
-of the pipeline.
+## Limitations
 
-**Default workflow (REMOVE verdicts only):** n = 12,847, accuracy = 99.00%,
-compared with a mean random-subset accuracy of 99.05% (difference = −0.05
-percentage points).
+- Laplacian blur measures edge density, so some smooth but sharp images are flagged.
+- CLEAN means no issue was found by the checks you enabled, not that the image is perfect.
+- Demo-grade access control: shared codes, not user accounts. Deploy only behind HTTPS.
+- Uploaded data is deleted after 24 hours and downloads after 6. Jobs do not survive a restart.
 
-### Removing one signal at a time
+## Project layout
 
-| Removed | Images left | Accuracy | Δ vs full |
-|---|---:|---:|---:|
-| Nothing | 13,474 | 99.00% | |
-| Duplicates (exact or near) | 12,647 | 98.93% | −0.07 |
-| High-confidence mislabels | 13,454 | 98.93% | −0.07 |
-| Blur | 12,798 | 99.06% | +0.06 |
-| Outliers | 12,523 | 98.60% | −0.40 |
-| Everything not CLEAN | 10,626 | 97.93% | −1.07 |
-
-Rows overlap and are single runs, so they do not add up. Differences under
-about 0.1 percentage points are approximately one validation image and are
-not meaningful. Outlier removal is the only single signal with a visible
-cost. The likely cause is that Isolation Forest cannot distinguish a rare
-valid image from a bad one.
-
-### What this does and does not show
-
-The experiment shows that on this dataset, classifier and validation set,
-pipeline-cleaned data did not beat a random subset of the same size. It does
-not show that the cleaned data is worse on new data, because the validation
-set comes from the same distribution.
-
-Regenerate with:
-
-python scripts/experiment_tables.py
-
-
-## Interactive Streamlit Dashboard
-
-### Home
-
-Provides an overview of the framework, technology stack, dataset statistics, and the complete image cleaning workflow.
-
-<p align="center">
-  <img src="assets/dashboard_home.png" width="900">
-</p>
-
----
-
-### Decision Engine Overview
-
-Displays the final cleaning decisions, issue distribution, and dataset quality statistics after combining all detection modules.
-
-<p align="center">
-  <img src="assets/dashboard_overview.png" width="900">
-</p>
-
----
-
-### Duplicate Detection
-
-Visualizes exact and near-duplicate image pairs detected using multi-hash perceptual hashing and cosine similarity.
-
-<p align="center">
-  <img src="assets/dashboard_duplicates.png" width="900">
-</p>
-
----
-
-### Analytics Dashboard
-
-Provides dataset cleaning efficiency, per-class issue statistics, module execution summary, and overall data quality metrics.
-
-<p align="center">
-  <img src="assets/dashboard_analytics.png" width="900">
-</p>
-
-## Upload Wizard (`cleaner_app.py`)
-
-Upload a ZIP of class folders or `train/val/test` folders of JPG or PNG
-images. The wizard validates the dataset, runs the selected checks, shows
-flagged images with reasons, and builds a cleaned dataset for your approval.
-
-Start the backend and frontend in separate terminals:
-
-```bash
-python run_api.py
+```
+src/          detection modules and decision engine
+api/          FastAPI backend (upload, jobs, results, download)
+cleaner_app.py   Streamlit upload wizard
+app.py           original analysis dashboard
+run_pipeline.py  command-line pipeline
+tests/        automated tests
 ```
 
-```bash
-streamlit run cleaner_app.py --server.maxUploadSize 500
-```
+Run the tests with `python -m pytest -q`.
 
-- Your upload is never modified; removals apply only to the copy you download.
-- Proposed removals are never applied unless you explicitly choose to apply them.
-- CLEAN means no issue was found by the checks you enabled.
-- Datasets need at least 30 images per class in each split.
-- **Not production-ready:** authentication, rate limiting and scheduled cleanup are not yet implemented.
+## Tech
 
-## Quick Start
-
-### 1. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Place dataset
-
-Download the Animals dataset from Kaggle and place it under `data/raw/Animal/`.
-
-### 3. Run the pipeline
-
-**Animal dataset**
-
-```bash
-python run_pipeline.py \
-    --data_dir data/raw/Animal \
-    --output_dir data_clean/Animal \
-    --skip-embeddings \
-    --skip-preprocessing
-
-# Any other dataset — zero code changes
-python run_pipeline.py \
-    --data_dir /path/to/your/dataset \
-    --output_dir /path/to/clean/output
-```
-
-The pipeline auto-discovers splits and classes from the folder structure.
-Reports are saved to `reports/<dataset_name>/`.
-```
-The master pipeline executes the modules in dependency order:
-
-1. Format distribution scan
-2. Image validation
-3. ResNet50 embedding extraction
-4. Duplicate detection
-5. Adaptive blur detection
-6. Adaptive noise detection and refinement
-7. Outlier detection
-8. Mislabel detection
-9. Decision Engine
-
-### 4. Launch dashboard
-
-```bash
-streamlit run app.py
-```
-
-### 5. Start production API
-
-```bash
-python run_api.py
-# API docs at http://localhost:8000/docs
-```
-
-## Current Progress
-
-| Module | Status |
-|---------|--------|
-| Image Validation | ✅ |
-| Format Normalisation | ✅ |
-| Feature Embedding Extraction | ✅ |
-| Duplicate Detection (BK-tree, empirically validated) | ✅ |
-| Blur Detection (adaptive per-class) | ✅ |
-| Autoencoder Training | ✅ |
-| Noise Detection (adaptive per-class) | ✅ |
-| Outlier Detection | ✅ |
-| Mislabel Detection (DBSCAN ensemble) | ✅ |
-| Decision Engine (confidence-adjusted) | ✅ |
-| Master Pipeline Script | ✅ |
-| Streamlit Dashboard (9 tabs) | ✅ |
-| FastAPI Production Backend | ✅ |
-
-
-## Known Limitations
-
-### Blur Detection — Edge Density vs Perceptual Blur
-
-The Laplacian variance blur detector measures **edge density**,
-not perceptual sharpness. A low score can mean:
-
-1. **Genuine optical blur** (motion, defocus) — correctly flagged ✅
-2. **Low-texture content** (smooth fur, plain background,
-   flat lighting) — flagged but visually acceptable ⚠️
-
-**Quantified impact:** ~99 images (1.8% of cat+dog training set)
-are low-texture but not genuinely blurry. All score below 50
-against class thresholds of 65–94. The threshold does not cut
-into normally-textured images — the gap between the highest
-blur-only removal (score 50) and the lowest threshold (65.8)
-confirms this.
-
-**Production fix:** Replace with BRISQUE (perceptual quality
-metric trained on human judgments) or add severity tiering
-— severe blur (score < 30) → REMOVE, moderate (30–threshold)
-→ REVIEW for human decision.
-
-## Future Improvements
-
-- Expand validation across additional datasets, visual domains, and class distributions.
-- Add active learning for automatic relabeling of HIGH-confidence mislabels.
-- Learn Decision Engine weights automatically from human-reviewed ground truth.
-- Support distributed processing for datasets exceeding 100k images.
-- Integrate CLIP embeddings for stronger semantic similarity across domains.
-- Add Docker support for one-command deployment.
-
-## Author
-
-**Mohammad Salman**
-B.Tech, IIT (ISM) Dhanbad
-
-- GitHub: https://github.com/24je0657
-- LinkedIn: https://www.linkedin.com/in/salman-mohammad-192ba035b
-
-If you find this project useful, consider giving it a ⭐ on GitHub.
+Python, PyTorch (ResNet50, autoencoder), scikit-learn, OpenCV, FastAPI, Streamlit, Docker.
