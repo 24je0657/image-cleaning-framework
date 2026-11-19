@@ -33,19 +33,23 @@ diagrams/
 models/*.pth
 
 # Notebook experiment outputs
-notebooks/experiment_results/
-notebooks/validation_outputs/
+experiments/notebooks/experiment_results/
+experiments/notebooks/validation_outputs/
 
 # Local application and verification files
 .streamlit/*
 !.streamlit/config.toml
 verification/
-notebooks/diagnosis_outputs/
-notebooks/visual_inspection_outputs/
-notebooks/visual_inspection_outputs/venv_py312_backup/
+experiments/notebooks/diagnosis_outputs/
+experiments/notebooks/visual_inspection_outputs/
+experiments/notebooks/visual_inspection_outputs/venv_py312_backup/
 # Python virtual environment backup
 /venv_py312_backup/
 # Per-job uploaded datasets and generated artifacts
 /jobs/
 !models/autoencoder.pth
 !models/autoencoder.pth
+reports/*/
+reports/*.csv
+reports/*.png
+reports/*.json

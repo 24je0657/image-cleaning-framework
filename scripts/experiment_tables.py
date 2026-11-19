@@ -89,7 +89,7 @@ def main():
            "n": m, "clean": round(default_acc, 2),
            "mean_random": round(float(np.mean(random_accs)), 2),
            "diff": round(default_acc - float(np.mean(random_accs)), 2)},}
-    target = ROOT / "notebooks/experiment_results/readme_tables.json"
+    target = ROOT / "experiments/notebooks/experiment_results/readme_tables.json"
     target.write_text(json.dumps(out, indent=2))
     print(json.dumps(out, indent=2))
 
