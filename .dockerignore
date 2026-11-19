@@ -6,7 +6,7 @@ data_clean/
 embeddings/
 reports/
 jobs/
-notebooks/
+experiments/
 *.zip
 **/__pycache__/
 *.step*_backup
